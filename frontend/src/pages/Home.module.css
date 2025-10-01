@@ -1,0 +1,312 @@
+.homePage {
+  padding-top: 76px; /* Account for fixed header */
+}
+
+/* Hero Section */
+.heroSection {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 120px 0 100px;
+  position: relative;
+  overflow: hidden;
+}
+
+.heroTitle {
+  font-size: 3.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 1.5rem;
+}
+
+.highlight {
+  background: linear-gradient(45deg, #f093fb 0%, #f5576c 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.heroSubtitle {
+  font-size: 1.3rem;
+  margin-bottom: 2.5rem;
+  opacity: 0.9;
+  line-height: 1.6;
+}
+
+.heroButtons {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.primaryBtn {
+  background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+  border: none;
+  padding: 15px 35px;
+  font-weight: 600;
+  border-radius: 50px;
+  transition: all 0.3s ease;
+}
+
+.primaryBtn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px rgba(255, 107, 107, 0.3);
+}
+
+.secondaryBtn {
+  padding: 15px 35px;
+  border: 2px solid white;
+  border-radius: 50px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.secondaryBtn:hover {
+  background: white;
+  color: #667eea;
+  transform: translateY(-3px);
+}
+
+.heroImage {
+  position: relative;
+  height: 400px;
+}
+
+.floatingCard {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 15px;
+  padding: 20px;
+  width: 200px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  animation: float 3s ease-in-out infinite;
+}
+
+.floatingCard.card2 {
+  top: 50%;
+  right: 0;
+  animation-delay: 1.5s;
+}
+
+.cardContent h6 {
+  margin-bottom: 5px;
+  font-weight: 600;
+}
+
+.cardContent p {
+  font-size: 0.9rem;
+  opacity: 0.8;
+  margin-bottom: 10px;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-20px); }
+}
+
+/* Features Section */
+.featuresSection {
+  padding: 100px 0;
+  background-color: var(--light-bg);
+}
+
+.sectionTitle {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: var(--primary-color);
+}
+
+.sectionSubtitle {
+  font-size: 1.2rem;
+  color: var(--light-text);
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.featureCard {
+  text-align: center;
+  padding: 40px 20px;
+  background: white;
+  border-radius: 15px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+  height: 100%;
+}
+
+.featureCard:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15);
+}
+
+.featureIcon {
+  font-size: 3rem;
+  margin-bottom: 1.5rem;
+}
+
+.featureCard h5 {
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--primary-color);
+}
+
+.featureCard p {
+  color: var(--light-text);
+  line-height: 1.6;
+}
+
+/* Courses Section */
+.coursesSection {
+  padding: 100px 0;
+}
+
+.courseCard {
+  border: none;
+  border-radius: 15px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  height: 100%;
+}
+
+.courseCard:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15);
+}
+
+.courseImage {
+  height: 200px;
+  background: linear-gradient(45deg, #667eea, #764ba2);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+}
+
+.levelBadge {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+}
+
+.courseTitle {
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--primary-color);
+}
+
+.courseDescription {
+  color: var(--light-text);
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+}
+
+.courseMeta {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--light-text);
+}
+
+.coursePrice {
+  margin-bottom: 1.5rem;
+}
+
+.currentPrice {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--secondary-color);
+}
+
+.originalPrice {
+  font-size: 1rem;
+  color: var(--light-text);
+  text-decoration: line-through;
+  margin-left: 10px;
+}
+
+.enrollBtn {
+  width: 100%;
+  padding: 12px;
+  font-weight: 600;
+  border-radius: 25px;
+}
+
+.loading {
+  padding: 40px;
+  font-size: 1.2rem;
+  color: var(--light-text);
+}
+
+/* CTA Section */
+.ctaSection {
+  padding: 100px 0;
+  background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+  color: white;
+  text-align: center;
+}
+
+.ctaTitle {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+
+.ctaSubtitle {
+  font-size: 1.2rem;
+  margin-bottom: 2.5rem;
+  opacity: 0.9;
+}
+
+.ctaButton {
+  background: linear-gradient(45deg, #3498db, #2980b9);
+  border: none;
+  padding: 15px 40px;
+  font-weight: 600;
+  border-radius: 50px;
+  font-size: 1.1rem;
+  transition: all 0.3s ease;
+}
+
+.ctaButton:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px rgba(52, 152, 219, 0.3);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .heroTitle {
+    font-size: 2.5rem;
+    text-align: center;
+  }
+  
+  .heroSubtitle {
+    font-size: 1.1rem;
+    text-align: center;
+  }
+  
+  .heroButtons {
+    justify-content: center;
+  }
+  
+  .sectionTitle {
+    font-size: 2rem;
+  }
+  
+  .ctaTitle {
+    font-size: 2rem;
+  }
+  
+  .floatingCard {
+    position: relative;
+    margin: 20px auto;
+    animation: none;
+  }
+  
+  .heroImage {
+    height: auto;
+    margin-top: 50px;
+  }
+}

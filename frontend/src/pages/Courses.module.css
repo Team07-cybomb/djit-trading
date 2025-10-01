@@ -1,0 +1,253 @@
+.coursesPage {
+  padding: 100px 0 50px;
+  min-height: 100vh;
+  background-color: #f8f9fa;
+}
+
+.pageHeader {
+  text-align: center;
+  margin-bottom: 50px;
+}
+
+.pageTitle {
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--primary-color);
+  margin-bottom: 1rem;
+}
+
+.pageSubtitle {
+  font-size: 1.2rem;
+  color: var(--light-text);
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.searchInput {
+  border-radius: 25px;
+  padding: 12px 20px;
+  border: 2px solid #e9ecef;
+  transition: all 0.3s ease;
+}
+
+.searchInput:focus {
+  border-color: var(--secondary-color);
+  box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+}
+
+.filterSelect {
+  border-radius: 25px;
+  padding: 12px 20px;
+  border: 2px solid #e9ecef;
+  transition: all 0.3s ease;
+}
+
+.filterSelect:focus {
+  border-color: var(--secondary-color);
+  box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+}
+
+.resultsInfo {
+  color: var(--light-text);
+  font-weight: 500;
+}
+
+.courseCard {
+  border: none;
+  border-radius: 15px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  height: 100%;
+  background: white;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+}
+
+.courseCard:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15);
+}
+
+.courseImage {
+  height: 200px;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(45deg, #667eea, #764ba2);
+}
+
+.courseImage img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.imagePlaceholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 3rem;
+  font-weight: 700;
+  background: linear-gradient(45deg, #667eea, #764ba2);
+}
+
+.levelBadge {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  font-size: 0.8rem;
+}
+
+.featuredBadge {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  font-size: 0.8rem;
+}
+
+.courseBody {
+  padding: 25px;
+  display: flex;
+  flex-direction: column;
+  height: calc(100% - 200px);
+}
+
+.courseHeader {
+  margin-bottom: 20px;
+  flex-grow: 1;
+}
+
+.courseTitle {
+  font-weight: 600;
+  font-size: 1.2rem;
+  margin-bottom: 10px;
+  color: var(--primary-color);
+  line-height: 1.4;
+}
+
+.courseDescription {
+  color: var(--light-text);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin-bottom: 0;
+}
+
+.courseMeta {
+  margin-bottom: 20px;
+}
+
+.courseMeta > div {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f1f3f4;
+}
+
+.metaLabel {
+  font-weight: 500;
+  color: var(--light-text);
+  font-size: 0.85rem;
+}
+
+.metaValue {
+  font-weight: 600;
+  color: var(--primary-color);
+  font-size: 0.85rem;
+}
+
+.courseFooter {
+  margin-top: auto;
+}
+
+.priceSection {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.coursePrice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.currentPrice {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--secondary-color);
+}
+
+.originalPrice {
+  font-size: 1rem;
+  color: var(--light-text);
+  text-decoration: line-through;
+}
+
+.discountBadge {
+  background: linear-gradient(45deg, #e74c3c, #c0392b);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 15px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.enrollBtn {
+  width: 100%;
+  padding: 12px;
+  font-weight: 600;
+  border-radius: 25px;
+  background: linear-gradient(45deg, #3498db, #2980b9);
+  border: none;
+  transition: all 0.3s ease;
+}
+
+.enrollBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(52, 152, 219, 0.3);
+}
+
+.loading {
+  padding: 60px 0;
+  text-align: center;
+  color: var(--light-text);
+}
+
+.noResults {
+  padding: 60px 0;
+  text-align: center;
+}
+
+.noResults h4 {
+  color: var(--primary-color);
+  margin-bottom: 1rem;
+}
+
+.noResults p {
+  color: var(--light-text);
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 768px) {
+  .coursesPage {
+    padding: 80px 0 30px;
+  }
+  
+  .pageTitle {
+    font-size: 2.2rem;
+  }
+  
+  .courseMeta > div {
+    flex-direction: column;
+    gap: 5px;
+  }
+  
+  .priceSection {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+  }
+}
