@@ -2,7 +2,7 @@
   background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
   color: #ecf0f1;
   padding: 60px 0 20px;
-  margin-top: 50px;
+  margin-top: 0px;
 }
 
 .footerTitle {
@@ -140,12 +140,12 @@
     padding: 40px 0 20px;
     text-align: center;
   }
-  
+
   .legalLinks {
     justify-content: center;
     margin-top: 15px;
   }
-  
+
   .socialLinks {
     justify-content: center;
   }
