@@ -31,14 +31,15 @@ import './App.css'
 
 function App() {
   const location = useLocation()
-  const isAdminRoute = location.pathname.startsWith('/admin') && location.pathname !== '/admin/login'
+  const isAdminRoute = location.pathname.startsWith('/admin')
+  const isAdminLogin = location.pathname === '/admin/login'
 
   return (
     <AuthProvider>
       <AdminAuthProvider>
-        <div className="App">
+        <div className={`App ${isAdminRoute ? 'admin-app' : ''}`}>
           {!isAdminRoute && <Header />}
-          <main>
+          <main className={isAdminRoute ? 'admin-main-content' : ''}>
             <Routes>
               {/* Public Routes */}
               <Route path="/" element={<Home />} />

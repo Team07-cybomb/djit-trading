@@ -239,7 +239,7 @@ a:focus {
 
 .App main {
   flex: 1;
-  padding-top: 76px; /* Account for fixed header */
+  padding-top: 0px; /* Account for fixed header */
 }
 
 /* Custom Scrollbar */
@@ -1086,4 +1086,13 @@ hr.custom-hr {
 .bg-gradient-secondary ::selection {
   background-color: rgba(255, 255, 255, 0.3);
   color: white;
+}
+.App:not(.admin-app) {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.App:not(.admin-app) main {
+  flex: 1;
 }
