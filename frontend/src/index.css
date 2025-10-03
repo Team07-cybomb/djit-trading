@@ -92,7 +92,7 @@ body {
 .navbar-brand {
   font-weight: 700;
   font-size: 1.5rem;
-  color: var(--primary-color) !important;
+  color: var(--primary-color);
 }
 
 .nav-link {
