@@ -8,18 +8,25 @@ const emailService = require('../services/emailService');
 // Create payment order
 exports.createPaymentOrder = async (req, res) => {
   try {
+    console.log('=== CREATE PAYMENT ORDER STARTED ===');
+    console.log('Request body:', req.body);
+    console.log('User ID:', req.user.id);
+
     const { courseId, couponCode } = req.body;
     const userId = req.user.id;
 
     // Get course details
+    console.log('Fetching course:', courseId);
     const course = await Course.findById(courseId);
+    console.log('Course found:', course);
+    
     if (!course) {
+      console.log('Course not found');
       return res.status(404).json({
         success: false,
         message: 'Course not found'
       });
     }
-
     // Check if already enrolled
     const existingEnrollment = await Enrollment.findOne({
       user: userId,
