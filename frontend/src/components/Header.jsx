@@ -3,22 +3,22 @@ import { Navbar, Nav, Container, NavDropdown } from "react-bootstrap";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import styles from "./Header.module.css";
-
+ 
 const Header = () => {
   const { user, logout, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
-
+ 
   const handleLogout = () => {
     logout();
     navigate("/");
     setExpanded(false);
   };
-
+ 
   const handleNavClick = () => {
     setExpanded(false);
   };
-
+ 
   return (
     <Navbar
       expand="lg"
@@ -30,12 +30,12 @@ const Header = () => {
         <Navbar.Brand as={Link} to="/" className={styles.brand}>
           TradeMaster Pro
         </Navbar.Brand>
-
+ 
         <Navbar.Toggle
           aria-controls="basic-navbar-nav"
           onClick={() => setExpanded(expanded ? false : "expanded")}
         />
-
+ 
         <Navbar.Collapse
           id="basic-navbar-nav"
           className={styles.navbarCollapse}
@@ -57,7 +57,7 @@ const Header = () => {
             >
               Courses
             </Nav.Link>
-
+ 
             <NavDropdown
               title="Tools"
               id="tools-dropdown"
@@ -85,7 +85,7 @@ const Header = () => {
                 SWP Calculator
               </NavDropdown.Item>
             </NavDropdown>
-
+ 
             <Nav.Link
               as={Link}
               to="/traders"
@@ -110,7 +110,7 @@ const Header = () => {
             >
               About
             </Nav.Link>
-
+ 
             {isAuthenticated ? (
               <NavDropdown
                 title={`Welcome, ${user?.username}`}
@@ -155,5 +155,5 @@ const Header = () => {
     </Navbar>
   );
 };
-
+ 
 export default Header;
