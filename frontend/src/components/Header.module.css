@@ -15,46 +15,220 @@
   background-clip: text;
 }
 
-.navbar .nav-link {
+/* CRITICAL FIX: Navbar collapse and nav alignment */
+.navbarCollapse {
+  flex-grow: 0 !important;
+}
+
+.navbarNav {
+  display: flex !important;
+  align-items: center !important;
+  flex-direction: row !important;
+  gap: 0 !important;
+  height: 100%;
+}
+
+/* Base nav link styling - APPLIED TO ALL NAV ITEMS */
+.navLink {
   color: var(--dark-text) !important;
-  font-weight: 500;
-  margin: 0 8px;
+  font-weight: 500 !important;
+  margin: 0 4px !important;
   padding: 8px 16px !important;
-  border-radius: 25px;
-  transition: all 0.3s ease;
+  border-radius: 25px !important;
+  transition: all 0.3s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  white-space: nowrap !important;
+  height: 40px !important;
+  box-sizing: border-box !important;
+  text-decoration: none !important;
 }
 
-.navbar .nav-link:hover {
+.navLink:hover {
   color: var(--secondary-color) !important;
-  background-color: rgba(52, 152, 219, 0.1);
+  background-color: rgba(52, 152, 219, 0.1) !important;
 }
 
+/* DROPDOWN CRITICAL FIX - Make dropdown behave exactly like nav links */
+.navDropdown {
+  display: flex !important;
+  align-items: center !important;
+  height: 40px !important;
+  margin: 0 4px !important;
+}
+
+/* Dropdown toggle - make it identical to navLink */
+.navDropdown .dropdown-toggle {
+  color: var(--dark-text) !important;
+  font-weight: 500 !important;
+  padding: 8px 16px !important;
+  border-radius: 25px !important;
+  transition: all 0.3s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  white-space: nowrap !important;
+  height: 40px !important;
+  box-sizing: border-box !important;
+  background: none !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  text-decoration: none !important;
+  margin: 0 !important;
+}
+
+.navDropdown .dropdown-toggle:hover {
+  color: var(--secondary-color) !important;
+  background-color: rgba(52, 152, 219, 0.1) !important;
+}
+
+.navDropdown .dropdown-toggle:focus {
+  box-shadow: none !important;
+  background-color: transparent !important;
+}
+
+.navDropdown .dropdown-toggle::after {
+  margin-left: 6px;
+}
+
+/* Dropdown menu styling */
 .navbar .dropdown-menu {
   border: none;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
   border-radius: 10px;
   padding: 10px;
+  margin-top: 8px;
 }
 
 .navbar .dropdown-item {
   padding: 10px 20px;
   border-radius: 8px;
   transition: all 0.3s ease;
+  color: var(--dark-text) !important;
+  display: flex !important;
+  align-items: center !important;
 }
 
 .navbar .dropdown-item:hover {
   background-color: rgba(52, 152, 219, 0.1);
-  color: var(--secondary-color);
+  color: var(--secondary-color) !important;
 }
 
+/* Auth container */
+.authContainer {
+  display: flex !important;
+  align-items: center !important;
+  margin-left: 0 !important;
+  gap: 0 !important;
+}
+
+.authContainer .navLink {
+  margin: 0 4px !important;
+}
+
+/* Force all nav items to have same height and alignment */
+.navbar .nav-item {
+  display: flex !important;
+  align-items: center !important;
+  height: 40px !important;
+}
+
+/* Remove any bootstrap default spacing */
+.navbar-nav .nav-link,
+.navbar-nav .dropdown {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Mobile responsiveness */
 @media (max-width: 991px) {
-  .navbar .nav-link {
-    margin: 5px 0;
-    text-align: center;
+  .navbarNav {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    gap: 5px !important;
   }
-  
-  .navbar .d-flex {
+
+  .navLink {
+    margin: 2px 0 !important;
+    text-align: center;
     justify-content: center;
-    margin-top: 10px;
+    width: 100%;
+  }
+
+  .navDropdown {
+    width: 100%;
+    margin: 2px 0 !important;
+    display: block !important;
+    height: auto !important;
+    text-align: center !important;
+  }
+
+  .navDropdown .dropdown-toggle {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+    margin: 0 !important;
+  }
+
+  .authContainer {
+    flex-direction: column;
+    width: 100%;
+    margin-top: 5px !important;
+  }
+
+  .authContainer .navLink {
+    margin: 2px 0 !important;
+    width: 100%;
+  }
+
+  .navbar .dropdown-menu {
+    text-align: center;
+    background-color: rgba(255, 255, 255, 0.98);
+    position: static !important;
+    transform: none !important;
+    border: none;
+    box-shadow: none;
+    margin-top: 0;
+  }
+
+  .navbar .dropdown-item {
+    display: inline-flex !important;
+    justify-content: center !important;
+    text-align: center !important;
+    width: auto !important; /* shrink to content */
+    margin: 0 auto !important; /* center inside dropdown menu */
+  }
+}
+
+/* Extra small devices */
+@media (max-width: 576px) {
+  .brand {
+    font-size: 1.5rem !important;
+  }
+
+  .navbar {
+    padding: 0.8rem 0;
+  }
+}
+
+/* Active state */
+.navbar .show > .navDropdown .dropdown-toggle {
+  color: var(--secondary-color) !important;
+  background-color: rgba(52, 152, 219, 0.1) !important;
+}
+
+/* Desktop specific fixes */
+@media (min-width: 992px) {
+  .navbar-expand-lg .navbar-nav {
+    flex-direction: row !important;
+    align-items: center !important;
+  }
+
+  .navbar-expand-lg .navbar-nav .nav-link {
+    padding-right: 16px !important;
+    padding-left: 16px !important;
   }
 }
