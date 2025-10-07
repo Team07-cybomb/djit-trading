@@ -95,13 +95,28 @@
  
 /* Dropdown menu styling */
 .navbar .dropdown-menu {
-  border: none;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-  border-radius: 10px;
-  padding: 10px;
-  margin-top: 8px;
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  position: absolute !important;
+  top: 100% !important;
+  left: 0 !important;
+  z-index: 1050 !important;
+  background-color: rgba(255, 255, 255, 0.98) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important;
+  padding: 8px !important;
+  min-width: 200px !important;
+  transition: all 0.3s ease !important;
 }
- 
+.navbar .dropdown-menu.show {
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
 .navbar .dropdown-item {
   padding: 10px 20px;
   border-radius: 8px;
@@ -185,14 +200,30 @@
   }
  
   .navbar .dropdown-menu {
-    text-align: center;
-    background-color: rgba(255, 255, 255, 0.98);
-    position: static !important;
-    transform: none !important;
-    border: none;
-    box-shadow: none;
-    margin-top: 0;
+    display: none;                     /* Let Bootstrap handle the toggle */
+    opacity: 0;                         /* Hidden by default */
+    visibility: hidden;
+    position: absolute !important;
+    top: 100% !important;
+    left: 0 !important;
+    z-index: 1050 !important;
+    background-color: rgba(255, 255, 255, 0.98) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(0, 0, 0, 0.1) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important;
+    padding: 8px !important;
+    min-width: 200px !important;
+    transition: all 0.3s ease !important;
   }
+  
+  /* 👇 Show menu when dropdown is open */
+  .navbar .dropdown-menu.show {
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+  
  
   .navbar .dropdown-item {
     display: inline-flex !important;
@@ -231,4 +262,5 @@
     padding-right: 16px !important;
     padding-left: 16px !important;
   }
+  
 }

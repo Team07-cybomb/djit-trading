@@ -622,7 +622,7 @@ a:focus {
 }
 
 /* Navigation Styles */
-.navbar-custom {
+/* .navbar-custom {
   backdrop-filter: blur(10px);
   background: rgba(255, 255, 255, 0.95) !important;
   box-shadow: 0 2px 20px var(--shadow-light);
@@ -651,7 +651,7 @@ a:focus {
 .nav-link-custom:focus {
   color: var(--secondary-color) !important;
   background-color: rgba(52, 152, 219, 0.1);
-}
+} */
 
 /* Footer Styles */
 .footer-custom {
