@@ -16,7 +16,7 @@ import Register from "./pages/Register";
 import FDCalculator from "./tools/FDCalculator";
 import SIPCalculator from "./tools/SIPCalculator";
 import SWPCalculator from "./tools/SWPCalculator";
-// import ContactForm from "./pages/ContactForm";
+import ContactForm from "./pages/ContactForm";
 
 // Admin Components
 import AdminRoute from "./components/admin/AdminRoute";
@@ -68,7 +68,7 @@ function App() {
               <Route path="/tools/fd-calculator" element={<FDCalculator />} />
               <Route path="/tools/sip-calculator" element={<SIPCalculator />} />
               <Route path="/tools/swp-calculator" element={<SWPCalculator />} />
-              {/* <Route path="/contact" element={<ContactForm />} /> */}
+              <Route path="/contact" element={<ContactForm />} />
 
               {/* Admin Routes */}
               <Route path="/admin/login" element={<AdminLogin />} />
