@@ -13,6 +13,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Static files
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/api/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Routes
 app.use("/api/auth", require("./routes/authRoutes"));
@@ -27,9 +28,8 @@ app.use("/api/reports", require("./routes/reportRoutes"));
 app.use("/api/admin/auth", require("./routes/adminAuthRoutes"));
 app.use("/api/admin", require("./routes/adminRoutes"));
 // Admin course routes
-app.use('/api/admin/courses', require('./routes/adminCourseRoutes'));
-// In server.js, add this line:
-// app.use('/api/admin/videos', require('./routes/adminVideoRoutes'));
+app.use("/api/admin/courses", require("./routes/adminCourseRoutes"));
+app.use("/api/admin/courses", require("./routes/courseContent"));
 
 // MongoDB Connection
 mongoose
