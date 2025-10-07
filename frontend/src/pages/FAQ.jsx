@@ -239,6 +239,23 @@ const FAQ = () => {
     },
   ];
 
+  // Function to handle email click
+  const handleEmailClick = () => {
+    window.location.href = "mailto:support@djittrading.com";
+  };
+
+  // Function to handle phone click
+  const handlePhoneClick = () => {
+    window.location.href = "tel:+919876543210";
+  };
+
+  // Function to handle live chat click
+  const handleLiveChatClick = () => {
+    // You can integrate with your live chat service here
+    // For now, we'll open a new window with a contact form
+    window.open("/contact", "_blank");
+  };
+
   return (
     <div className={styles.faqPage}>
       {/* Hero Section */}
@@ -294,11 +311,6 @@ const FAQ = () => {
             </Col>
           </Row>
         </Container>
-
-        {/* Animated Elements */}
-        <div className={styles.floatingElement1}></div>
-        <div className={styles.floatingElement2}></div>
-        <div className={styles.floatingElement3}></div>
       </section>
 
       {/* FAQ Categories Section - Redesigned */}
@@ -463,9 +475,19 @@ const FAQ = () => {
               <div className={styles.contactMethod}>
                 <div className={styles.contactIcon}>📧</div>
                 <h5>Email Support</h5>
-                <p>support@djittrading.com</p>
+                <p
+                  className={styles.clickableText}
+                  onClick={handleEmailClick}
+                  style={{ cursor: "pointer" }}
+                >
+                  support@djittrading.com
+                </p>
                 <small>Typically replies within 2 hours</small>
-                <Button variant="outline-primary" className="mt-3">
+                <Button
+                  variant="outline-primary"
+                  className="mt-3"
+                  onClick={handleEmailClick}
+                >
                   Send Email
                 </Button>
               </div>
@@ -473,11 +495,15 @@ const FAQ = () => {
             <Col lg={4} className="mb-4">
               <div className={styles.contactMethod}>
                 <div className={styles.contactIcon}>💬</div>
-                <h5>Live Chat</h5>
+                <h5>Contact Us</h5>
                 <p>Available 24/5 Market Hours</p>
                 <small>Get instant help from our team</small>
-                <Button variant="outline-primary" className="mt-3">
-                  Start Chat
+                <Button
+                  variant="outline-primary"
+                  className="mt-3"
+                  onClick={handleLiveChatClick}
+                >
+                  Get in Touch
                 </Button>
               </div>
             </Col>
@@ -485,9 +511,19 @@ const FAQ = () => {
               <div className={styles.contactMethod}>
                 <div className={styles.contactIcon}>📞</div>
                 <h5>Phone Support</h5>
-                <p>+91-98765-43210</p>
+                <p
+                  className={styles.clickableText}
+                  onClick={handlePhoneClick}
+                  style={{ cursor: "pointer" }}
+                >
+                  +91 9715092104
+                </p>
                 <small>Mon-Sat, 9 AM - 6 PM IST</small>
-                <Button variant="outline-primary" className="mt-3">
+                <Button
+                  variant="outline-primary"
+                  className="mt-3"
+                  onClick={handlePhoneClick}
+                >
                   Call Now
                 </Button>
               </div>
@@ -524,7 +560,7 @@ const FAQ = () => {
                   </Button>
                   <Button
                     as={Link}
-                    to="/signup"
+                    to="/register"
                     variant="outline-light"
                     size="lg"
                     className={styles.secondaryCta}

@@ -1,3 +1,4 @@
+// FDCalculator.jsx
 import React, { useState } from "react";
 import {
   Container,
@@ -8,7 +9,7 @@ import {
   Button,
   Table,
 } from "react-bootstrap";
-import styles from "./Calculators.module.css";
+import styles from "./FDCalculator.module.css";
 
 const FDCalculator = () => {
   const [formData, setFormData] = useState({
@@ -110,11 +111,6 @@ const FDCalculator = () => {
             </Col>
           </Row>
         </Container>
-
-        {/* Animated Elements */}
-        <div className={styles.floatingElement1}></div>
-        <div className={styles.floatingElement2}></div>
-        <div className={styles.floatingElement3}></div>
       </section>
 
       {/* Calculator Section */}
