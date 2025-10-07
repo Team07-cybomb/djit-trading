@@ -273,10 +273,10 @@
   font-size: 1.3rem;
 }
 
-/* Features Section - Reduced Padding */
+/* Features Section - Updated Background Color (from Testimonials) */
 .featuresSection {
   padding: 80px 0; /* Reduced from 120px */
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  background: white; /* Changed from gradient to white background */
   position: relative;
 }
 
@@ -315,10 +315,15 @@
   font-weight: 400;
 }
 
+/* Feature Cards - Updated Background Color (from Download App Section) */
 .featureCard {
   text-align: center;
   padding: 50px 30px;
-  background: white;
+  background: linear-gradient(
+    135deg,
+    #f8f9fa 0%,
+    #e9ecef 100%
+  ); /* Changed from white to gradient */
   border-radius: 20px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
   transition: all 0.4s ease;
@@ -372,7 +377,269 @@
   font-size: 1.1rem;
 }
 
-/* Testimonials Section - Reduced Padding */
+/* Featured Courses Section - EXACT MATCH with Courses.jsx */
+.featuredCoursesSection {
+  padding: 100px 0;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  min-height: 100vh;
+}
+
+.featuredCoursesSection .sectionHeader {
+  margin-bottom: 60px;
+}
+
+.featuredCoursesSection .sectionTitle {
+  font-size: 3.2rem;
+  font-weight: 800;
+  margin-bottom: 1.5rem;
+  color: #1e3c72;
+  text-align: center;
+  position: relative;
+}
+
+.featuredCoursesSection .sectionTitle::after {
+  content: "";
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80px;
+  height: 4px;
+  background: linear-gradient(135deg, #ff6b6b, #ffd700);
+  border-radius: 2px;
+}
+
+.featuredCoursesSection .sectionSubtitle {
+  font-size: 1.4rem;
+  color: #6c757d;
+  max-width: 700px;
+  margin: 0 auto;
+  text-align: center;
+  line-height: 1.6;
+  font-weight: 400;
+}
+
+/* Course Card Styles - EXACT MATCH with Courses.jsx */
+.courseCard {
+  border: none;
+  border-radius: 15px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  height: 100%;
+  background: white;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+}
+
+.courseCard:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15);
+}
+
+.courseImage {
+  height: 200px;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(45deg, #667eea, #764ba2);
+}
+
+.courseImage img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.imagePlaceholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 3rem;
+  font-weight: 700;
+  background: linear-gradient(45deg, #667eea, #764ba2);
+}
+
+.levelBadge {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  font-size: 0.8rem;
+  padding: 6px 12px;
+  border-radius: 15px;
+  font-weight: 600;
+}
+
+.featuredBadge {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  font-size: 0.8rem;
+  padding: 6px 12px;
+  border-radius: 15px;
+  font-weight: 600;
+}
+
+.freeBadge {
+  position: absolute;
+  bottom: 15px;
+  left: 15px;
+  font-size: 0.8rem;
+  padding: 6px 12px;
+  border-radius: 15px;
+  font-weight: 600;
+}
+
+.courseBody {
+  padding: 25px;
+  display: flex;
+  flex-direction: column;
+  height: calc(100% - 200px);
+}
+
+.courseHeader {
+  margin-bottom: 20px;
+  flex-grow: 1;
+}
+
+.courseTitle {
+  font-weight: 600;
+  font-size: 1.2rem;
+  margin-bottom: 10px;
+  color: #1a3a6b;
+  line-height: 1.4;
+}
+
+.courseDescription {
+  color: #6c757d;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin-bottom: 0;
+}
+
+.courseMeta {
+  margin-bottom: 20px;
+}
+
+.courseMeta > div {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f1f3f4;
+}
+
+.courseMeta > div:last-child {
+  border-bottom: none;
+}
+
+.metaLabel {
+  font-weight: 500;
+  color: #6c757d;
+  font-size: 0.85rem;
+}
+
+.metaValue {
+  font-weight: 600;
+  color: #1a3a6b;
+  font-size: 0.85rem;
+}
+
+.courseFooter {
+  margin-top: auto;
+}
+
+.priceSection {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.coursePrice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.currentPrice {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #007bff;
+}
+
+.originalPrice {
+  font-size: 1rem;
+  color: #6c757d;
+  text-decoration: line-through;
+}
+
+.freePrice {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #28a745;
+}
+
+.discountBadge {
+  background: linear-gradient(45deg, #e74c3c, #c0392b);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 15px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.enrollBtn {
+  width: 100%;
+  padding: 12px;
+  font-weight: 600;
+  border-radius: 25px;
+  background: linear-gradient(45deg, #3498db, #2980b9);
+  border: none;
+  transition: all 0.3s ease;
+  font-size: 1rem;
+}
+
+.enrollBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(52, 152, 219, 0.3);
+}
+
+/* Loading and No Results */
+.loading {
+  padding: 60px 0;
+  text-align: center;
+  color: #6c757d;
+}
+
+.noResults {
+  padding: 60px 0;
+  text-align: center;
+}
+
+.noResults h4 {
+  color: #1a3a6b;
+  margin-bottom: 1rem;
+}
+
+.noResults p {
+  color: #6c757d;
+  margin-bottom: 2rem;
+}
+
+.viewAllBtn {
+  padding: 12px 40px;
+  border-radius: 25px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.viewAllBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0, 123, 255, 0.3);
+}
+
+/* Testimonials Section - Updated Background Color (from Features Section) */
 .testimonialsSection {
   padding: 80px 0; /* Reduced from 120px */
   background: white;
@@ -380,7 +647,7 @@
 }
 
 .testimonialCard {
-  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  background: white; /* Changed from gradient to white */
   border-radius: 20px;
   padding: 50px 35px;
   text-align: center;
@@ -445,7 +712,7 @@
   font-weight: 500;
 }
 
-/* Download App Section - Reduced Padding */
+/* Download App Section - Updated Background Color (white) */
 .downloadAppSection {
   padding: 80px 0; /* Reduced from 120px */
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
@@ -467,7 +734,7 @@
   gap: 1.5rem;
   margin-bottom: 2rem;
   padding: 1.5rem;
-  background: white;
+  background: white; /* Keep white for app features */
   border-radius: 16px;
   box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
   transition: all 0.3s ease;
@@ -1015,7 +1282,7 @@
   }
 
   .tagline {
-    font-size: 1.8rem;
+    font-size: 2rem;
   }
 
   .description {
@@ -1024,7 +1291,7 @@
 
   .heroStats {
     grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
+    gap: 1.5rem;
   }
 
   .heroButtons {
@@ -1035,7 +1302,7 @@
   .primaryBtn,
   .secondaryBtn {
     width: 100%;
-    max-width: 280px;
+    max-width: 300px;
   }
 
   .sectionTitle {
@@ -1062,17 +1329,15 @@
   .primaryCta,
   .secondaryCta {
     width: 100%;
-    max-width: 280px;
-  }
-
-  .downloadButtons {
-    flex-direction: column;
-    align-items: center;
+    max-width: 300px;
   }
 
   .storeButton {
     width: 100%;
     max-width: 250px;
+  }
+
+  .downloadButtons {
     justify-content: center;
   }
 
@@ -1081,10 +1346,12 @@
   }
 
   .floatingNotification {
-    right: 0;
-    left: 0;
-    margin: 0 auto;
-    max-width: 250px;
+    right: 10px;
+  }
+
+  .trustBadges {
+    flex-direction: column;
+    align-items: center;
   }
 }
 
@@ -1098,7 +1365,7 @@
   }
 
   .tagline {
-    font-size: 1.5rem;
+    font-size: 1.8rem;
   }
 
   .description {
@@ -1109,20 +1376,38 @@
     grid-template-columns: 1fr;
   }
 
-  .stat strong {
+  .sectionTitle {
     font-size: 2rem;
   }
 
-  .sectionTitle {
-    font-size: 2rem;
+  .sectionSubtitle {
+    font-size: 1rem;
   }
 
   .ctaTitle {
     font-size: 2rem;
   }
 
-  .trustBadges {
+  .ctaSubtitle {
+    font-size: 1rem;
+  }
+
+  .featureCard {
+    padding: 30px 20px;
+  }
+
+  .testimonialCard {
+    padding: 30px 20px;
+  }
+
+  .appFeature {
     flex-direction: column;
-    align-items: center;
+    text-align: center;
+    gap: 1rem;
+  }
+
+  .phoneFrame {
+    width: 250px;
+    height: 500px;
   }
 }

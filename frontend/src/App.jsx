@@ -1,45 +1,59 @@
-import React from 'react'
-import { Routes, Route, useLocation } from 'react-router-dom'
-import { AuthProvider } from './context/AuthContext'
-import { AdminAuthProvider } from './context/AdminAuthContext'
-import Header from './components/Header'
-import Footer from './components/Footer'
-import Home from './pages/Home'
-import Courses from './pages/Courses'
-import Traders from './pages/Traders'
-import FAQ from './pages/FAQ'
-import About from './pages/About'
-import Terms from './pages/Terms'
-import Privacy from './pages/Privacy'
-import Login from './pages/Login'
-import Register from './pages/Register'
-import FDCalculator from './tools/FDCalculator'
-import SIPCalculator from './tools/SIPCalculator'
-import SWPCalculator from './tools/SWPCalculator'
+import React, { useEffect } from "react";
+import { Routes, Route, useLocation } from "react-router-dom";
+import { AuthProvider } from "./context/AuthContext";
+import { AdminAuthProvider } from "./context/AdminAuthContext";
+import Header from "./components/Header";
+import Footer from "./components/Footer";
+import Home from "./pages/Home";
+import Courses from "./pages/Courses";
+import Traders from "./pages/Traders";
+import FAQ from "./pages/FAQ";
+import About from "./pages/About";
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import FDCalculator from "./tools/FDCalculator";
+import SIPCalculator from "./tools/SIPCalculator";
+import SWPCalculator from "./tools/SWPCalculator";
+import ContactForm from "./pages/ContactForm";
 
 // Admin Components
-import AdminRoute from './components/admin/AdminRoute'
-import AdminLayout from './components/admin/AdminLayout'
-import AdminLogin from './pages/admin/AdminLogin'
-import AdminDashboard from './pages/admin/AdminDashboard'
-import CourseManagement from './pages/admin/CourseManagement'
-import UserManagement from './pages/admin/UserManagement'
-import EnrollmentManagement from './pages/admin/EnrollmentManagement'
-import NewsletterManagement from './pages/admin/NewsletterManagement'
+import AdminRoute from "./components/admin/AdminRoute";
+import AdminLayout from "./components/admin/AdminLayout";
+import AdminLogin from "./pages/admin/AdminLogin";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import CourseManagement from "./pages/admin/CourseManagement";
+import UserManagement from "./pages/admin/UserManagement";
+import EnrollmentManagement from "./pages/admin/EnrollmentManagement";
+import NewsletterManagement from "./pages/admin/NewsletterManagement";
 
-import './App.css'
+import "./App.css";
+
+// ✅ ScrollToTop function defined inside App.tsx
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
+  return null;
+}
 
 function App() {
-  const location = useLocation()
-  const isAdminRoute = location.pathname.startsWith('/admin')
-  const isAdminLogin = location.pathname === '/admin/login'
+  const location = useLocation();
+  const isAdminRoute = location.pathname.startsWith("/admin");
+  const isAdminLogin = location.pathname === "/admin/login";
 
   return (
     <AuthProvider>
       <AdminAuthProvider>
-        <div className={`App ${isAdminRoute ? 'admin-app' : ''}`}>
+        <div className={`App ${isAdminRoute ? "admin-app" : ""}`}>
           {!isAdminRoute && <Header />}
-          <main className={isAdminRoute ? 'admin-main-content' : ''}>
+          <main className={isAdminRoute ? "admin-main-content" : ""}>
+            {/* ✅ Use ScrollToTop here */}
+            <ScrollToTop />
             <Routes>
               {/* Public Routes */}
               <Route path="/" element={<Home />} />
@@ -54,11 +68,12 @@ function App() {
               <Route path="/tools/fd-calculator" element={<FDCalculator />} />
               <Route path="/tools/sip-calculator" element={<SIPCalculator />} />
               <Route path="/tools/swp-calculator" element={<SWPCalculator />} />
-              
+              <Route path="/contact" element={<ContactForm />} />
+
               {/* Admin Routes */}
               <Route path="/admin/login" element={<AdminLogin />} />
-              <Route 
-                path="/admin/*" 
+              <Route
+                path="/admin/*"
                 element={
                   <AdminRoute>
                     <AdminLayout />
@@ -77,7 +92,7 @@ function App() {
         </div>
       </AdminAuthProvider>
     </AuthProvider>
-  )
+  );
 }
 
-export default App
+export default App;
