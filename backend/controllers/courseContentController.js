@@ -1,12 +1,68 @@
-const CourseContent = require('../models/CourseContent');
-const Course = require('../models/Course');
+const mongoose = require('mongoose');
 const fs = require('fs');
 const path = require('path');
 
 // Debug: Check if models are loaded
 console.log('=== DEBUG: CourseContent Controller Loading ===');
+
+// Robust model loading with error handling
+let CourseContent, CourseModel;
+
+try {
+  CourseContent = require('../models/CourseContent');
+  CourseModel = require('../models/Course');
+  console.log('✅ Models loaded via require');
+} catch (error) {
+  console.log('⚠️ Models not found via require, using mongoose models');
+  CourseContent = mongoose.models.CourseContent;
+  CourseModel = mongoose.models.Course;
+}
+
 console.log('CourseContent model:', CourseContent ? 'Loaded' : 'NOT LOADED');
-console.log('Course model:', Course ? 'Loaded' : 'NOT LOADED');
+console.log('Course model:', CourseModel ? 'Loaded' : 'NOT LOADED');
+console.log('All mongoose models:', Object.keys(mongoose.models));
+
+// Debug models function
+exports.debugModels = async (req, res) => {
+  try {
+    console.log('🔍 Debugging models...');
+    
+    const models = {
+      CourseContent: !!mongoose.models.CourseContent,
+      Course: !!mongoose.models.Course,
+      Admin: !!mongoose.models.Admin,
+      User: !!mongoose.models.User
+    };
+    
+    console.log('📊 Available mongoose models:', Object.keys(mongoose.models));
+    console.log('🔍 Required models status:', models);
+    
+    // Test database connection
+    const courseCount = await mongoose.models.Course?.countDocuments() || 'N/A';
+    const contentCount = await mongoose.models.CourseContent?.countDocuments() || 'N/A';
+    
+    res.json({
+      success: true,
+      models,
+      mongooseModels: Object.keys(mongoose.models),
+      database: {
+        courseCount,
+        contentCount
+      },
+      environment: {
+        node_env: process.env.NODE_ENV,
+        port: process.env.PORT
+      }
+    });
+  } catch (error) {
+    console.error('❌ Debug models error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      mongooseModels: Object.keys(mongoose.models || {})
+    });
+  }
+};
 
 // Get all content for a course
 exports.getCourseContent = async (req, res) => {
@@ -15,9 +71,10 @@ exports.getCourseContent = async (req, res) => {
     
     console.log('=== DEBUG: getCourseContent called ===');
     console.log('CourseId:', courseId);
+    console.log('Admin making request:', req.admin?.email);
 
     // Verify course exists first
-    const courseExists = await Course.findById(courseId);
+    const courseExists = await CourseModel.findById(courseId);
     console.log('Course exists:', !!courseExists);
     
     if (!courseExists) {
@@ -56,6 +113,7 @@ exports.getCourseContent = async (req, res) => {
 // Add new course content with file upload
 exports.addCourseContent = async (req, res) => {
   console.log('=== DEBUG: addCourseContent called ===');
+  console.log('Request admin:', req.admin?.email);
   console.log('Request body:', req.body);
   console.log('Request files:', req.files);
   console.log('Course ID:', req.params.courseId);
@@ -73,8 +131,21 @@ exports.addCourseContent = async (req, res) => {
       isFree
     } = req.body;
 
+    // Check if CourseContent model is available
+    if (!CourseContent) {
+      console.error('❌ CourseContent model is not defined!');
+      // Try to get it from mongoose models
+      const CourseContentModel = mongoose.model('CourseContent');
+      if (!CourseContentModel) {
+        return res.status(500).json({
+          success: false,
+          message: 'Server configuration error: CourseContent model not loaded'
+        });
+      }
+    }
+
     // Check if course exists
-    const course = await Course.findById(courseId);
+    const course = await CourseModel.findById(courseId);
     if (!course) {
       console.log('❌ Course not found:', courseId);
       return res.status(404).json({
@@ -87,9 +158,9 @@ exports.addCourseContent = async (req, res) => {
 
     const contentData = {
       course: courseId,
-      title: title.trim(),
+      title: title?.trim() || '',
       description: description?.trim() || '',
-      type,
+      type: type || 'video',
       duration: duration?.trim() || '',
       order: parseInt(order) || 1,
       isFree: isFree === 'true' || isFree === true
@@ -166,19 +237,12 @@ exports.addCourseContent = async (req, res) => {
 
     console.log('💾 Saving content to database...');
     
-    // Debug: Check if CourseContent is defined before using it
-    if (!CourseContent) {
-      console.error('❌ CourseContent model is not defined!');
-      return res.status(500).json({
-        success: false,
-        message: 'Server configuration error: CourseContent model not loaded'
-      });
-    }
-
-    const newContent = new CourseContent(contentData);
+    // Use the model directly from mongoose if CourseContent import failed
+    const ContentModel = CourseContent || mongoose.model('CourseContent');
+    const newContent = new ContentModel(contentData);
     await newContent.save();
 
-    console.log('✅ Content saved successfully');
+    console.log('✅ Content saved successfully:', newContent._id);
 
     res.status(201).json({
       success: true,
@@ -451,7 +515,7 @@ exports.getContentById = async (req, res) => {
   }
 };
 
-// Update content order (bulk update) - ADD THIS MISSING FUNCTION
+// Update content order (bulk update)
 exports.updateContentOrder = async (req, res) => {
   try {
     const { courseId } = req.params;
