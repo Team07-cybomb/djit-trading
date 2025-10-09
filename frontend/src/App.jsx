@@ -17,6 +17,7 @@ import FDCalculator from "./tools/FDCalculator";
 import SIPCalculator from "./tools/SIPCalculator";
 import SWPCalculator from "./tools/SWPCalculator";
 import ContactForm from "./pages/ContactForm";
+import Learning from "./pages/Learning";
 
 // Admin Components
 import AdminRoute from "./components/admin/AdminRoute";
@@ -27,6 +28,7 @@ import CourseManagement from "./pages/admin/CourseManagement";
 import UserManagement from "./pages/admin/UserManagement";
 import EnrollmentManagement from "./pages/admin/EnrollmentManagement";
 import NewsletterManagement from "./pages/admin/NewsletterManagement";
+import CouponGenerator from "./pages/admin/CouponGenerator";
 
 import "./App.css";
 
@@ -69,6 +71,7 @@ function App() {
               <Route path="/tools/sip-calculator" element={<SIPCalculator />} />
               <Route path="/tools/swp-calculator" element={<SWPCalculator />} />
               <Route path="/contact" element={<ContactForm />} />
+              <Route path="/learning/:courseId" element={<Learning />} />
 
               {/* Admin Routes */}
               <Route path="/admin/login" element={<AdminLogin />} />
@@ -85,6 +88,7 @@ function App() {
                 <Route path="users" element={<UserManagement />} />
                 <Route path="enrollments" element={<EnrollmentManagement />} />
                 <Route path="newsletter" element={<NewsletterManagement />} />
+                <Route path="coupon" element={<CouponGenerator />} />
               </Route>
             </Routes>
           </main>

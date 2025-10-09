@@ -39,4 +39,5 @@ const couponSchema = new mongoose.Schema({
   timestamps: true
 });
 
-module.exports = mongoose.model('Coupon', couponSchema);
+// 👇 Prevent OverwriteModelError when model already exists
+module.exports = mongoose.models.Coupon || mongoose.model('Coupon', couponSchema);

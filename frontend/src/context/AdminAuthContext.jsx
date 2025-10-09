@@ -46,7 +46,7 @@ export const AdminAuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await axios.post('/api/admin/auth/login', { email, password })
+      const response = await axios.post('http://localhost:5000/api/admin/auth/login', { email, password })
       const { token: newToken, admin: adminData } = response.data
       
       localStorage.setItem('adminToken', newToken)

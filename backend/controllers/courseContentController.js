@@ -1,592 +1,422 @@
-const mongoose = require('mongoose');
-const fs = require('fs');
-const path = require('path');
+// controllers/courseContentController.js
+const path = require("path");
+const fs = require("fs");
+const CourseContent = require("../models/CourseContent");
+const Enrollment = require("../models/Enrollment");
+const Progress = require("../models/Progress");
 
-// Debug: Check if models are loaded
-console.log('=== DEBUG: CourseContent Controller Loading ===');
-
-// Robust model loading with error handling
-let CourseContent, CourseModel;
-
-try {
-  CourseContent = require('../models/CourseContent');
-  CourseModel = require('../models/Course');
-  console.log('✅ Models loaded via require');
-} catch (error) {
-  console.log('⚠️ Models not found via require, using mongoose models');
-  CourseContent = mongoose.models.CourseContent;
-  CourseModel = mongoose.models.Course;
-}
-
-console.log('CourseContent model:', CourseContent ? 'Loaded' : 'NOT LOADED');
-console.log('Course model:', CourseModel ? 'Loaded' : 'NOT LOADED');
-console.log('All mongoose models:', Object.keys(mongoose.models));
-
-// Debug models function
-exports.debugModels = async (req, res) => {
+// Upload content
+const uploadContent = async (req, res) => {
   try {
-    console.log('🔍 Debugging models...');
-    
-    const models = {
-      CourseContent: !!mongoose.models.CourseContent,
-      Course: !!mongoose.models.Course,
-      Admin: !!mongoose.models.Admin,
-      User: !!mongoose.models.User
-    };
-    
-    console.log('📊 Available mongoose models:', Object.keys(mongoose.models));
-    console.log('🔍 Required models status:', models);
-    
-    // Test database connection
-    const courseCount = await mongoose.models.Course?.countDocuments() || 'N/A';
-    const contentCount = await mongoose.models.CourseContent?.countDocuments() || 'N/A';
-    
-    res.json({
-      success: true,
-      models,
-      mongooseModels: Object.keys(mongoose.models),
-      database: {
-        courseCount,
-        contentCount
-      },
-      environment: {
-        node_env: process.env.NODE_ENV,
-        port: process.env.PORT
+    const { title, courseId, type, description, duration, order, isFree, videoUrl, documentUrl } = req.body;
+
+    if (!title || !courseId || !type)
+      return res.status(400).json({ success: false, message: "Missing required fields" });
+
+    // Prepare file data if uploaded
+    let videoFileData = null;
+    let documentFileData = null;
+
+    if (req.files) {
+      if (req.files.videoFile) {
+        const file = req.files.videoFile[0];
+        videoFileData = {
+          filename: file.filename,
+          originalName: file.originalname,
+          path: file.path,
+          size: file.size,
+          mimetype: file.mimetype,
+          url: `/uploads/${file.filename}`,
+        };
       }
-    });
-  } catch (error) {
-    console.error('❌ Debug models error:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      mongooseModels: Object.keys(mongoose.models || {})
-    });
-  }
-};
-
-// Get all content for a course
-exports.getCourseContent = async (req, res) => {
-  try {
-    const { courseId } = req.params;
-    
-    console.log('=== DEBUG: getCourseContent called ===');
-    console.log('CourseId:', courseId);
-    console.log('Admin making request:', req.admin?.email);
-
-    // Verify course exists first
-    const courseExists = await CourseModel.findById(courseId);
-    console.log('Course exists:', !!courseExists);
-    
-    if (!courseExists) {
-      return res.status(404).json({
-        success: false,
-        message: 'Course not found'
-      });
+      if (req.files.documentFile) {
+        const file = req.files.documentFile[0];
+        documentFileData = {
+          filename: file.filename,
+          originalName: file.originalname,
+          path: file.path,
+          size: file.size,
+          mimetype: file.mimetype,
+          url: `/uploads/${file.filename}`,
+        };
+      }
     }
-    
-    const content = await CourseContent.find({ course: courseId })
-      .sort({ order: 1 })
-      .select('-__v');
-    
-    console.log('✅ Found content:', content.length, 'items');
-    
-    res.json({
-      success: true,
-      content,
-      count: content.length,
-      course: {
-        title: courseExists.title,
-        _id: courseExists._id
-      }
-    });
-  } catch (error) {
-    console.error('❌ Error in getCourseContent:', error);
-    
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching course content',
-      error: error.message
-    });
-  }
-};
 
-// Add new course content with file upload
-exports.addCourseContent = async (req, res) => {
-  console.log('=== DEBUG: addCourseContent called ===');
-  console.log('Request admin:', req.admin?.email);
-  console.log('Request body:', req.body);
-  console.log('Request files:', req.files);
-  console.log('Course ID:', req.params.courseId);
-
-  try {
-    const { courseId } = req.params;
-    const {
+    const newContent = new CourseContent({
+      course: courseId,
       title,
       description,
       type,
-      videoUrl,
-      documentUrl,
       duration,
-      order,
-      isFree
-    } = req.body;
+      order: order || 1,
+      isFree: isFree === "true" || isFree === true,
+      videoUrl: videoUrl || "",
+      documentUrl: documentUrl || "",
+      videoFile: videoFileData,
+      documentFile: documentFileData,
+    });
 
-    // Check if CourseContent model is available
-    if (!CourseContent) {
-      console.error('❌ CourseContent model is not defined!');
-      // Try to get it from mongoose models
-      const CourseContentModel = mongoose.model('CourseContent');
-      if (!CourseContentModel) {
-        return res.status(500).json({
-          success: false,
-          message: 'Server configuration error: CourseContent model not loaded'
-        });
-      }
-    }
-
-    // Check if course exists
-    const course = await CourseModel.findById(courseId);
-    if (!course) {
-      console.log('❌ Course not found:', courseId);
-      return res.status(404).json({
-        success: false,
-        message: 'Course not found'
-      });
-    }
-
-    console.log('✅ Course found:', course.title);
-
-    const contentData = {
-      course: courseId,
-      title: title?.trim() || '',
-      description: description?.trim() || '',
-      type: type || 'video',
-      duration: duration?.trim() || '',
-      order: parseInt(order) || 1,
-      isFree: isFree === 'true' || isFree === true
-    };
-
-    console.log('📝 Content data:', contentData);
-
-    // Handle file uploads
-    if (req.files) {
-      console.log('📁 Files received:', Object.keys(req.files));
-      
-      if (req.files.videoFile && req.files.videoFile[0]) {
-        const videoFile = req.files.videoFile[0];
-        console.log('🎥 Video file details:', {
-          filename: videoFile.filename,
-          originalName: videoFile.originalname,
-          path: videoFile.path,
-          size: videoFile.size,
-          mimetype: videoFile.mimetype
-        });
-        
-        contentData.videoFile = {
-          filename: videoFile.filename,
-          originalName: videoFile.originalname,
-          path: videoFile.path,
-          size: videoFile.size,
-          mimetype: videoFile.mimetype,
-          url: `/api/admin/courses/content/uploads/videos/${videoFile.filename}`
-        };
-        contentData.videoUrl = contentData.videoFile.url;
-      }
-
-      if (req.files.documentFile && req.files.documentFile[0]) {
-        const documentFile = req.files.documentFile[0];
-        console.log('📄 Document file details:', {
-          filename: documentFile.filename,
-          originalName: documentFile.originalname,
-          path: documentFile.path,
-          size: documentFile.size,
-          mimetype: documentFile.mimetype
-        });
-        
-        contentData.documentFile = {
-          filename: documentFile.filename,
-          originalName: documentFile.originalname,
-          path: documentFile.path,
-          size: documentFile.size,
-          mimetype: documentFile.mimetype,
-          url: `/api/admin/courses/content/uploads/documents/${documentFile.filename}`
-        };
-        contentData.documentUrl = contentData.documentFile.url;
-      }
-    } else {
-      console.log('📝 No files received, using URL fields');
-      // Use URL fields if no files uploaded
-      if (videoUrl) contentData.videoUrl = videoUrl.trim();
-      if (documentUrl) contentData.documentUrl = documentUrl.trim();
-    }
-
-    // Validate that required media is provided based on type
-    if (contentData.type === 'video' && !contentData.videoUrl && !contentData.videoFile) {
-      return res.status(400).json({
-        success: false,
-        message: 'Video content requires either a video file or video URL'
-      });
-    }
-
-    if ((contentData.type === 'document' || contentData.type === 'pdf') && !contentData.documentUrl && !contentData.documentFile) {
-      return res.status(400).json({
-        success: false,
-        message: 'Document content requires either a document file or document URL'
-      });
-    }
-
-    console.log('💾 Saving content to database...');
-    
-    // Use the model directly from mongoose if CourseContent import failed
-    const ContentModel = CourseContent || mongoose.model('CourseContent');
-    const newContent = new ContentModel(contentData);
     await newContent.save();
 
-    console.log('✅ Content saved successfully:', newContent._id);
-
-    res.status(201).json({
-      success: true,
-      message: 'Content added successfully',
-      content: newContent
-    });
-
+    res.json({ success: true, message: "Content uploaded successfully", content: newContent });
   } catch (error) {
-    console.error('❌ Error adding course content:', error);
-    console.error('Error stack:', error.stack);
-    
-    // Clean up uploaded files if there was an error
-    if (req.files) {
-      console.log('🧹 Cleaning up uploaded files due to error');
-      Object.values(req.files).forEach(fileArray => {
-        fileArray.forEach(file => {
-          if (fs.existsSync(file.path)) {
-            try {
-              fs.unlinkSync(file.path);
-              console.log(`✅ Deleted file: ${file.path}`);
-            } catch (unlinkError) {
-              console.error('❌ Error deleting file:', unlinkError);
-            }
-          }
-        });
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: 'Error creating course content',
-      error: error.message
-    });
+    console.error("❌ Error uploading content:", error);
+    res.status(500).json({ success: false, message: error.message || "Server error" });
   }
 };
 
-// Update course content
-exports.updateCourseContent = async (req, res) => {
+// Get contents for enrolled users
+const getCourseContents = async (req, res) => {
   try {
-    const { courseId, contentId } = req.params;
-    const updateData = { ...req.body };
+    const { courseId } = req.params;
+    const userId = req.user.id;
 
-    // Check if content exists and belongs to course
-    const existingContent = await CourseContent.findOne({
-      _id: contentId,
-      course: courseId
+    console.log(`Fetching course content for user ${userId}, course ${courseId}`);
+
+    // Check if user is enrolled in the course - using your enrollment model
+    const enrollment = await Enrollment.findOne({
+      user: userId,
+      course: courseId,
+      paymentStatus: 'completed' // Only allow access if payment is completed
     });
 
-    if (!existingContent) {
-      return res.status(404).json({
-        success: false,
-        message: 'Content not found'
+    if (!enrollment) {
+      return res.status(403).json({ 
+        success: false, 
+        message: "You are not enrolled in this course or payment is pending. Please enroll first." 
       });
     }
 
-    // Handle file uploads if any
-    if (req.files) {
-      if (req.files.videoFile && req.files.videoFile[0]) {
-        const videoFile = req.files.videoFile[0];
-        
-        // Delete old video file if exists
-        if (existingContent.videoFile && existingContent.videoFile.path) {
-          if (fs.existsSync(existingContent.videoFile.path)) {
-            fs.unlinkSync(existingContent.videoFile.path);
-          }
-        }
+    // Get course content with status active, sorted by order
+    const contents = await CourseContent.find({ 
+      course: courseId,
+      status: 'active'
+    }).sort({ order: 1 });
 
-        updateData.videoFile = {
-          filename: videoFile.filename,
-          originalName: videoFile.originalname,
-          path: videoFile.path,
-          size: videoFile.size,
-          mimetype: videoFile.mimetype,
-          url: `/api/admin/courses/content/uploads/videos/${videoFile.filename}`
-        };
-        updateData.videoUrl = updateData.videoFile.url;
+    // Get user progress
+    const userProgress = await Progress.find({
+      user: userId,
+      course: courseId,
+    });
+
+    const completedContentIds = userProgress.map(progress => progress.content.toString());
+
+    // Calculate overall progress percentage
+    const progressPercentage = contents.length > 0 ? 
+      Math.round((userProgress.length / contents.length) * 100) : 0;
+
+    res.json({ 
+      success: true, 
+      content: contents,
+      enrollment: {
+        enrollmentDate: enrollment.enrollmentDate,
+        progress: enrollment.progress,
+        completed: enrollment.completed
+      },
+      progress: {
+        completed: userProgress.length,
+        total: contents.length,
+        completedContentIds: completedContentIds,
+        percentage: progressPercentage
       }
+    });
+  } catch (error) {
+    console.error("Error fetching course contents:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
 
-      if (req.files.documentFile && req.files.documentFile[0]) {
-        const documentFile = req.files.documentFile[0];
-        
-        // Delete old document file if exists
-        if (existingContent.documentFile && existingContent.documentFile.path) {
-          if (fs.existsSync(existingContent.documentFile.path)) {
-            fs.unlinkSync(existingContent.documentFile.path);
-          }
-        }
+// Get public course contents (free content for preview)
+const getPublicCourseContents = async (req, res) => {
+  try {
+    const { courseId } = req.params;
 
-        updateData.documentFile = {
-          filename: documentFile.filename,
-          originalName: documentFile.originalname,
-          path: documentFile.path,
-          size: documentFile.size,
-          mimetype: documentFile.mimetype,
-          url: `/api/admin/courses/content/uploads/documents/${documentFile.filename}`
+    const contents = await CourseContent.find({ 
+      course: courseId,
+      status: 'active',
+      isFree: true
+    }).sort({ order: 1 }).select('title description type duration order isFree');
+
+    res.json({ success: true, content: contents });
+  } catch (error) {
+    console.error("Error fetching public course contents:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// Delete content
+const deleteContent = async (req, res) => {
+  try {
+    const content = await CourseContent.findById(req.params.id);
+    if (!content) return res.status(404).json({ success: false, message: "Content not found" });
+
+    let filePath = null;
+    if (content.videoFile?.path) filePath = path.join(__dirname, "..", content.videoFile.path);
+    else if (content.documentFile?.path) filePath = path.join(__dirname, "..", content.documentFile.path);
+
+    if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+    await CourseContent.findByIdAndDelete(req.params.id);
+
+    res.json({ success: true, message: "Content deleted successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// Update content
+const updateContent = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = { ...req.body };
+
+    // Handle file uploads
+    if (req.files) {
+      if (req.files.videoFile) {
+        const file = req.files.videoFile[0];
+        updateData.videoFile = {
+          filename: file.filename,
+          originalName: file.originalname,
+          path: file.path,
+          size: file.size,
+          mimetype: file.mimetype,
+          url: `/uploads/${file.filename}`,
         };
-        updateData.documentUrl = updateData.documentFile.url;
+      }
+      if (req.files.documentFile) {
+        const file = req.files.documentFile[0];
+        updateData.documentFile = {
+          filename: file.filename,
+          originalName: file.originalname,
+          path: file.path,
+          size: file.size,
+          mimetype: file.mimetype,
+          url: `/uploads/${file.filename}`,
+        };
       }
     }
 
-    // Convert order to number if present
+    // Convert string booleans
+    if (updateData.isFree) {
+      updateData.isFree = updateData.isFree === "true" || updateData.isFree === true;
+    }
     if (updateData.order) {
       updateData.order = parseInt(updateData.order);
     }
 
     const updatedContent = await CourseContent.findByIdAndUpdate(
-      contentId,
+      id,
       updateData,
       { new: true, runValidators: true }
-    ).select('-__v');
+    );
 
-    res.json({
-      success: true,
-      message: 'Content updated successfully',
-      content: updatedContent
-    });
-
-  } catch (error) {
-    console.error('Error updating course content:', error);
-    
-    // Clean up uploaded files if there was an error
-    if (req.files) {
-      Object.values(req.files).forEach(fileArray => {
-        fileArray.forEach(file => {
-          if (fs.existsSync(file.path)) {
-            fs.unlinkSync(file.path);
-          }
-        });
+    if (!updatedContent) {
+      return res.status(404).json({
+        success: false,
+        message: "Course content not found",
       });
     }
 
+    res.json({
+      success: true,
+      message: "Course content updated successfully",
+      content: updatedContent,
+    });
+  } catch (error) {
+    console.error("Error updating course content:", error);
     res.status(500).json({
       success: false,
-      message: 'Error updating course content',
-      error: error.message
+      message: "Error updating course content",
+      error: error.message,
     });
   }
 };
 
-// Delete course content
-exports.deleteCourseContent = async (req, res) => {
+// Mark content as completed
+const markAsCompleted = async (req, res) => {
   try {
-    const { courseId, contentId } = req.params;
+    const { contentId } = req.params;
+    const userId = req.user.id;
 
-    const content = await CourseContent.findOne({
-      _id: contentId,
-      course: courseId
-    });
+    console.log(`Marking content ${contentId} as completed for user ${userId}`);
 
+    // Check if content exists
+    const content = await CourseContent.findById(contentId);
     if (!content) {
       return res.status(404).json({
         success: false,
-        message: 'Content not found'
+        message: "Content not found",
       });
     }
 
-    // Delete associated files
-    if (content.videoFile && content.videoFile.path) {
-      if (fs.existsSync(content.videoFile.path)) {
-        fs.unlinkSync(content.videoFile.path);
-      }
-    }
-
-    if (content.documentFile && content.documentFile.path) {
-      if (fs.existsSync(content.documentFile.path)) {
-        fs.unlinkSync(content.documentFile.path);
-      }
-    }
-
-    await CourseContent.findByIdAndDelete(contentId);
-
-    res.json({
-      success: true,
-      message: 'Content deleted successfully'
+    // Check if user is enrolled in the course with completed payment
+    const enrollment = await Enrollment.findOne({
+      user: userId,
+      course: content.course,
+      paymentStatus: 'completed'
     });
 
-  } catch (error) {
-    console.error('Error deleting course content:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error deleting course content',
-      error: error.message
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not enrolled in this course or payment is pending",
+      });
+    }
+
+    // Check if already completed
+    const existingProgress = await Progress.findOne({
+      user: userId,
+      content: contentId,
     });
-  }
-};
 
-// Serve uploaded files
-exports.serveFile = async (req, res) => {
-  try {
-    const { fileType, filename } = req.params;
-    
-    const validTypes = ['videos', 'documents'];
-    if (!validTypes.includes(fileType)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid file type'
+    if (existingProgress) {
+      return res.json({
+        success: true,
+        message: "Content already marked as completed",
+        progress: existingProgress,
       });
     }
 
-    const filePath = path.join(__dirname, '..', 'uploads', fileType, filename);
-    
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({
-        success: false,
-        message: 'File not found'
-      });
-    }
+    // Create progress record
+    const progress = new Progress({
+      user: userId,
+      course: content.course,
+      content: contentId,
+      completedAt: new Date(),
+    });
 
-    // Set appropriate headers
-    const ext = path.extname(filename).toLowerCase();
-    const mimeTypes = {
-      '.mp4': 'video/mp4',
-      '.avi': 'video/x-msvideo',
-      '.mov': 'video/quicktime',
-      '.webm': 'video/webm',
-      '.pdf': 'application/pdf',
-      '.doc': 'application/msword',
-      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      '.ppt': 'application/vnd.ms-powerpoint',
-      '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      '.txt': 'text/plain'
+    await progress.save();
+
+    // Get updated progress count
+    const totalProgress = await Progress.countDocuments({
+      user: userId,
+      course: content.course,
+    });
+
+    const totalContent = await CourseContent.countDocuments({
+      course: content.course,
+      status: 'active',
+    });
+
+    // Calculate new progress percentage
+    const progressPercentage = Math.round((totalProgress / totalContent) * 100);
+
+    // Update enrollment progress and check if course is completed
+    const updateData = {
+      progress: progressPercentage
     };
 
-    const mimeType = mimeTypes[ext] || 'application/octet-stream';
-    res.setHeader('Content-Type', mimeType);
-    
-    // Stream the file
-    const fileStream = fs.createReadStream(filePath);
-    fileStream.pipe(res);
-
-  } catch (error) {
-    console.error('Error serving file:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error serving file',
-      error: error.message
-    });
-  }
-};
-
-// Get single content item
-exports.getContentById = async (req, res) => {
-  try {
-    const { courseId, contentId } = req.params;
-
-    const content = await CourseContent.findOne({
-      _id: contentId,
-      course: courseId
-    }).select('-__v');
-
-    if (!content) {
-      return res.status(404).json({
-        success: false,
-        message: 'Content not found'
-      });
+    // If all content is completed, mark course as completed
+    if (totalProgress === totalContent && totalContent > 0) {
+      updateData.completed = true;
     }
+
+    await Enrollment.findOneAndUpdate(
+      { user: userId, course: content.course },
+      updateData
+    );
 
     res.json({
       success: true,
-      content
+      message: "Content marked as completed",
+      progress: {
+        completed: totalProgress,
+        total: totalContent,
+        percentage: progressPercentage,
+      },
+      enrollment: {
+        progress: progressPercentage,
+        completed: updateData.completed || false
+      }
     });
-
   } catch (error) {
-    console.error('Error fetching content:', error);
+    console.error("Error marking content complete:", error);
     res.status(500).json({
       success: false,
-      message: 'Error fetching content',
-      error: error.message
+      message: "Error marking content as completed",
+      error: error.message,
     });
   }
 };
 
-// Update content order (bulk update)
-exports.updateContentOrder = async (req, res) => {
+// Get user progress for a course
+const getUserProgress = async (req, res) => {
   try {
     const { courseId } = req.params;
-    const { contentOrder } = req.body;
+    const userId = req.user.id;
 
-    if (!Array.isArray(contentOrder)) {
-      return res.status(400).json({
-        success: false,
-        message: 'contentOrder must be an array'
-      });
-    }
+    const progress = await Progress.find({
+      user: userId,
+      course: courseId,
+    }).populate("content", "title type order");
 
-    const bulkOps = contentOrder.map(item => ({
-      updateOne: {
-        filter: { _id: item.id, course: courseId },
-        update: { order: item.order }
-      }
-    }));
+    const totalContent = await CourseContent.countDocuments({
+      course: courseId,
+      status: 'active',
+    });
 
-    await CourseContent.bulkWrite(bulkOps);
+    const enrollment = await Enrollment.findOne({
+      user: userId,
+      course: courseId,
+    });
 
     res.json({
       success: true,
-      message: 'Content order updated successfully'
+      progress: {
+        completed: progress.length,
+        total: totalContent,
+        percentage: totalContent > 0 ? Math.round((progress.length / totalContent) * 100) : 0,
+        completedContents: progress.map(p => p.content._id),
+        details: progress,
+      },
+      enrollment: enrollment,
     });
-
   } catch (error) {
-    console.error('Error updating content order:', error);
+    console.error("Error fetching user progress:", error);
     res.status(500).json({
       success: false,
-      message: 'Error updating content order',
-      error: error.message
+      message: "Error fetching user progress",
+      error: error.message,
     });
   }
 };
 
-// Test route for debugging
-exports.testRoute = async (req, res) => {
+// Check if user is enrolled in a course
+const checkEnrollment = async (req, res) => {
   try {
-    console.log('=== DEBUG: Test route called ===');
-    console.log('CourseId from params:', req.params.courseId);
-    
-    // Test if CourseContent model is available
-    if (!CourseContent) {
-      return res.status(500).json({
-        success: false,
-        message: 'CourseContent model not loaded',
-        modelLoaded: false
-      });
-    }
-    
-    const content = await CourseContent.find({ course: req.params.courseId }).sort({ order: 1 });
-    
-    console.log('✅ Database query successful, found:', content.length, 'items');
-    
+    const { courseId } = req.params;
+    const userId = req.user.id;
+
+    const enrollment = await Enrollment.findOne({
+      user: userId,
+      course: courseId,
+      paymentStatus: 'completed'
+    });
+
     res.json({
       success: true,
-      content,
-      debug: {
-        modelLoaded: true,
-        courseId: req.params.courseId,
-        count: content.length
-      }
+      enrolled: !!enrollment,
+      enrollment: enrollment
     });
   } catch (error) {
-    console.error('❌ Test route error:', error);
+    console.error("Error checking enrollment:", error);
     res.status(500).json({
       success: false,
-      message: 'Test route error',
+      message: "Error checking enrollment status",
       error: error.message,
-      modelLoaded: !!CourseContent
     });
   }
+};
+
+// Export all functions
+module.exports = {
+  uploadContent,
+  getCourseContents,
+  getPublicCourseContents,
+  deleteContent,
+  updateContent,
+  markAsCompleted,
+  getUserProgress,
+  checkEnrollment
 };

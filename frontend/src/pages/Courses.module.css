@@ -390,6 +390,33 @@
   border-radius: 25px;
   font-weight: 600;
 }
+/* Coupon discount style */
+.couponDiscount {
+  display: flex;
+  justify-content: space-between;
+  color: #28a745;
+  font-weight: 500;
+}
+
+.discountText {
+  color: #28a745;
+  font-weight: bold;
+}
+
+/* Final price style */
+.finalPrice {
+  display: flex;
+  justify-content: space-between;
+  font-size: 1.1rem;
+  padding: 8px 0;
+  border-top: 2px solid #dee2e6;
+  margin-top: 8px;
+}
+
+.freePrice {
+  color: #28a745;
+  font-weight: bold;
+}
 
 @media (max-width: 768px) {
   .coursesPage {

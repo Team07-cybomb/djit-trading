@@ -1,6 +1,7 @@
+// routes/enrollmentRoutes.js
 const express = require('express');
 const { createEnrollment, getUserEnrollments, updateProgress } = require('../controllers/enrollmentController');
-const { auth } = require('../middleware/auth');
+const { auth } = require('../middleware/auth'); // Fixed: destructure auth
 
 const router = express.Router();
 

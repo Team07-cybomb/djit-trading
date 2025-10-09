@@ -19,7 +19,7 @@ const Footer = () => {
   const handleNewsletterSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post("/api/newsletter", { email });
+      await axios.post("http://localhost:5000/api/newsletter", { email });
       setAlert({
         show: true,
         message: "Successfully subscribed to newsletter!",

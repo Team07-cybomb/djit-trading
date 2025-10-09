@@ -29,6 +29,7 @@ const AdminLayout = () => {
     { path: '/admin/users', icon: '👥', label: 'Users', badge: '3' },
     { path: '/admin/enrollments', icon: '🎓', label: 'Enrollments', badge: '45' },
     { path: '/admin/newsletter', icon: '📧', label: 'Newsletter', badge: null },
+    { path: '/admin/coupon', icon: '📧', label: 'Coupon Generator', badge: null },
   ]
 
   return (
