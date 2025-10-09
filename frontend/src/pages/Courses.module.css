@@ -417,6 +417,17 @@
   color: #28a745;
   font-weight: bold;
 }
+/* Add this to your Courses.module.css */
+.enrolledBadge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  font-size: 0.7rem;
+}
+
+.buttonIcon {
+  margin-right: 5px;
+}
 
 @media (max-width: 768px) {
   .coursesPage {

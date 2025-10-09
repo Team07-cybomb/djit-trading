@@ -23,7 +23,7 @@ const uploadContent = async (req, res) => {
         videoFileData = {
           filename: file.filename,
           originalName: file.originalname,
-          path: file.path,
+          path: `uploads/${file.filename}`, // FIX: Store relative path
           size: file.size,
           mimetype: file.mimetype,
           url: `/uploads/${file.filename}`,
@@ -34,7 +34,7 @@ const uploadContent = async (req, res) => {
         documentFileData = {
           filename: file.filename,
           originalName: file.originalname,
-          path: file.path,
+          path: `uploads/${file.filename}`, // FIX: Store relative path
           size: file.size,
           mimetype: file.mimetype,
           url: `/uploads/${file.filename}`,
@@ -178,7 +178,7 @@ const updateContent = async (req, res) => {
         updateData.videoFile = {
           filename: file.filename,
           originalName: file.originalname,
-          path: file.path,
+          path: `uploads/${file.filename}`, // FIX: Store relative path
           size: file.size,
           mimetype: file.mimetype,
           url: `/uploads/${file.filename}`,
@@ -189,7 +189,7 @@ const updateContent = async (req, res) => {
         updateData.documentFile = {
           filename: file.filename,
           originalName: file.originalname,
-          path: file.path,
+          path: `uploads/${file.filename}`, // FIX: Store relative path
           size: file.size,
           mimetype: file.mimetype,
           url: `/uploads/${file.filename}`,

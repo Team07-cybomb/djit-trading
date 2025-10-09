@@ -143,6 +143,7 @@ const Courses = () => {
         {
           courseId: selectedCourse._id,
           couponCode: validatedCoupon?.coupon?.code || couponCode,
+          finalAmount: finalPrice
         },
         {
           headers: {
@@ -169,6 +170,7 @@ const Courses = () => {
           {
             courseId: selectedCourse._id,
             couponCode: validatedCoupon?.coupon?.code || couponCode,
+            isFreeEnrollment: calculateFinalPrice() === 0
           },
           {
             headers: {

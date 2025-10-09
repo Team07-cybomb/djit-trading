@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react'
 import { Container, Row, Col, Card, Badge, Table, Form, Button } from 'react-bootstrap'
 import { useAuth } from '../context/AuthContext'
+import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import styles from './Traders.module.css'
 
 const Traders = () => {
   const { user, isAuthenticated } = useAuth()
+  const navigate = useNavigate()
   const [profile, setProfile] = useState(null)
   const [enrollments, setEnrollments] = useState([])
   const [isEditing, setIsEditing] = useState(false)
@@ -55,7 +57,11 @@ const Traders = () => {
 
   const fetchEnrollments = async () => {
     try {
-      const response = await axios.get(`/api/enrollments/user/${user.id}`)
+      const response = await axios.get(`/api/enrollments/user/${user.id}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        }
+      })
       setEnrollments(response.data.enrollments || [])
     } catch (error) {
       console.error('Error fetching enrollments:', error)
@@ -84,12 +90,24 @@ const Traders = () => {
   const handleSubmit = async (e) => {
     e.preventDefault()
     try {
-      await axios.put('/api/users/profile', formData)
+      await axios.put('/api/users/profile', formData, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        }
+      })
       await fetchUserProfile()
       setIsEditing(false)
     } catch (error) {
       console.error('Error updating profile:', error)
     }
+  }
+
+  const handleContinueLearning = (courseId) => {
+    navigate(`/learning/${courseId}`)
+  }
+
+  const handleBrowseCourses = () => {
+    navigate('/courses')
   }
 
   const getBadgeVariant = (badge) => {
@@ -100,6 +118,19 @@ const Traders = () => {
       case 'Pro': return 'primary'
       default: return 'secondary'
     }
+  }
+
+  const getProgressVariant = (progress) => {
+    if (progress === 100) return 'success'
+    if (progress >= 50) return 'primary'
+    if (progress > 0) return 'warning'
+    return 'secondary'
+  }
+
+  const getProgressText = (progress) => {
+    if (progress === 0) return 'Not Started'
+    if (progress === 100) return 'Completed'
+    return `In Progress (${progress}%)`
   }
 
   if (!isAuthenticated) {
@@ -149,10 +180,10 @@ const Traders = () => {
                   </div>
                   <div className={styles.stat}>
                     <span className={styles.statNumber}>
-                      {Math.round(enrollments.reduce((acc, curr) => acc + curr.progress, 0) / 
+                      {Math.round(enrollments.reduce((acc, curr) => acc + (curr.progress || 0), 0) / 
                        (enrollments.length || 1))}%
                     </span>
-                    <span className={styles.statLabel}>Progress</span>
+                    <span className={styles.statLabel}>Avg Progress</span>
                   </div>
                 </div>
               </Card.Body>
@@ -165,18 +196,75 @@ const Traders = () => {
               </Card.Header>
               <Card.Body>
                 <div className={styles.actionButtons}>
-                  <Button variant="outline-primary" className={styles.actionBtn}>
+                  <Button 
+                    variant="outline-primary" 
+                    className={styles.actionBtn}
+                    onClick={handleBrowseCourses}
+                  >
                     Browse Courses
                   </Button>
-                  <Button variant="outline-success" className={styles.actionBtn}>
+                  <Button 
+                    variant="outline-success" 
+                    className={styles.actionBtn}
+                    onClick={() => navigate('/progress')}
+                  >
                     My Progress
                   </Button>
-                  <Button variant="outline-info" className={styles.actionBtn}>
+                  <Button 
+                    variant="outline-info" 
+                    className={styles.actionBtn}
+                    onClick={() => navigate('/community')}
+                  >
                     Community
                   </Button>
                 </div>
               </Card.Body>
             </Card>
+
+            {/* Continue Learning Section */}
+            {enrollments.filter(e => e.progress > 0 && e.progress < 100).length > 0 && (
+              <Card className={styles.continueCard}>
+                <Card.Header>
+                  <h5 className={styles.cardTitle}>Continue Learning</h5>
+                </Card.Header>
+                <Card.Body>
+                  <div className={styles.continueList}>
+                    {enrollments
+                      .filter(enrollment => enrollment.progress > 0 && enrollment.progress < 100)
+                      .slice(0, 3) // Show max 3 courses
+                      .map(enrollment => (
+                        <div key={enrollment._id} className={styles.continueItem}>
+                          <div className={styles.courseInfo}>
+                            <h6 className={styles.courseTitle}>
+                              {enrollment.course?.title}
+                            </h6>
+                            <div className={styles.progressSection}>
+                              <div className={styles.progressBar}>
+                                <div 
+                                  className={styles.progressFill}
+                                  style={{ width: `${enrollment.progress}%` }}
+                                ></div>
+                              </div>
+                              <span className={styles.progressText}>
+                                {enrollment.progress}%
+                              </span>
+                            </div>
+                          </div>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            className={styles.continueBtn}
+                            onClick={() => handleContinueLearning(enrollment.course?._id || enrollment.course)}
+                          >
+                            Continue
+                          </Button>
+                        </div>
+                      ))
+                    }
+                  </div>
+                </Card.Body>
+              </Card>
+            )}
           </Col>
 
           <Col lg={8}>
@@ -443,7 +531,7 @@ const Traders = () => {
                         <th>Course</th>
                         <th>Progress</th>
                         <th>Status</th>
-                        <th>Enrolled Date</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -451,29 +539,37 @@ const Traders = () => {
                         <tr key={enrollment._id}>
                           <td>
                             <strong>{enrollment.course?.title}</strong>
+                            <div className={styles.courseMeta}>
+                              <small className="text-muted">
+                                Enrolled: {new Date(enrollment.enrollmentDate).toLocaleDateString()}
+                              </small>
+                            </div>
                           </td>
                           <td>
                             <div className={styles.progressBar}>
                               <div 
                                 className={styles.progressFill}
-                                style={{ width: `${enrollment.progress}%` }}
+                                style={{ width: `${enrollment.progress || 0}%` }}
                               ></div>
                               <span className={styles.progressText}>
-                                {enrollment.progress}%
+                                {enrollment.progress || 0}%
                               </span>
                             </div>
                           </td>
                           <td>
-                            <Badge 
-                              bg={enrollment.completed ? 'success' : 
-                                  enrollment.paymentStatus === 'completed' ? 'primary' : 'warning'}
-                            >
-                              {enrollment.completed ? 'Completed' : 
-                               enrollment.paymentStatus === 'completed' ? 'In Progress' : 'Pending'}
+                            <Badge bg={getProgressVariant(enrollment.progress || 0)}>
+                              {getProgressText(enrollment.progress || 0)}
                             </Badge>
                           </td>
                           <td>
-                            {new Date(enrollment.enrollmentDate).toLocaleDateString()}
+                            <Button
+                              variant={enrollment.progress === 100 ? "outline-success" : "primary"}
+                              size="sm"
+                              onClick={() => handleContinueLearning(enrollment.course?._id || enrollment.course)}
+                            >
+                              {enrollment.progress === 100 ? 'Review' : 
+                               enrollment.progress > 0 ? 'Continue' : 'Start'}
+                            </Button>
                           </td>
                         </tr>
                       ))}
@@ -482,7 +578,7 @@ const Traders = () => {
                 ) : (
                   <div className={styles.noEnrollments}>
                     <p>You haven't enrolled in any courses yet.</p>
-                    <Button variant="primary">
+                    <Button variant="primary" onClick={handleBrowseCourses}>
                       Browse Courses
                     </Button>
                   </div>
