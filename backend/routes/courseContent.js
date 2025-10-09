@@ -1,46 +1,28 @@
-const express = require('express');
+// routes/courseContent.js
+const express = require("express");
 const router = express.Router();
-const courseContentController = require('../controllers/courseContentController');
-const { uploadContentFiles, handleUploadError } = require('../middleware/uploadMiddleware');
-const { adminAuth } = require('../middleware/auth'); // Fixed import path
+const upload = require("../middleware/uploadMiddleware");
+const courseContentController = require("../controllers/courseContentController");
+const { auth, adminAuth } = require("../middleware/auth"); // Make sure both are imported
 
-console.log('=== DEBUG: CourseContent Routes Loading ===');
+// Multi-file support
+const multiUpload = upload.fields([
+  { name: "videoFile", maxCount: 1 },
+  { name: "documentFile", maxCount: 1 },
+]);
 
-// Apply admin auth middleware to all routes
-router.use(adminAuth);
+// Public routes
+router.get("/public/:courseId", courseContentController.getPublicCourseContents);
 
-// Test route for debugging
-router.get('/test/:courseId', courseContentController.testRoute);
+// Protected routes - UPLOAD route uses adminAuth
+router.post("/upload", adminAuth, multiUpload, courseContentController.uploadContent); // Changed to adminAuth
+router.get("/:courseId", auth, courseContentController.getCourseContents);
+router.put("/:id", auth, multiUpload, courseContentController.updateContent);
+router.delete("/:id", auth, courseContentController.deleteContent);
 
-// Get all content for a course
-router.get('/:courseId/content', courseContentController.getCourseContent);
-
-// Get single content item
-router.get('/:courseId/content/:contentId', courseContentController.getContentById);
-
-// Add new course content with file upload
-router.post('/:courseId/content', 
-  uploadContentFiles,
-  handleUploadError,
-  courseContentController.addCourseContent
-);
-
-// Update course content
-router.put('/:courseId/content/:contentId',
-  uploadContentFiles,
-  handleUploadError,
-  courseContentController.updateCourseContent
-);
-
-// Delete course content
-router.delete('/:courseId/content/:contentId', courseContentController.deleteCourseContent);
-
-// Update content order (bulk update)
-router.put('/:courseId/content-order', courseContentController.updateContentOrder);
-
-// Serve uploaded files (make this public if needed)
-router.get('/content/uploads/:fileType/:filename', courseContentController.serveFile);
-
-console.log('=== DEBUG: CourseContent Routes Loaded ===');
+// Progress tracking routes
+router.post("/:contentId/complete", auth, courseContentController.markAsCompleted);
+router.get("/progress/:courseId", auth, courseContentController.getUserProgress);
+router.get("/check-enrollment/:courseId", auth, courseContentController.checkEnrollment);
 
 module.exports = router;

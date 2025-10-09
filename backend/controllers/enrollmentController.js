@@ -4,8 +4,10 @@ const Course = require('../models/Course');
 // Create enrollment
 exports.createEnrollment = async (req, res) => {
   try {
-    const { courseId, couponCode } = req.body;
+    const { courseId, couponCode, finalAmount = 0 } = req.body; // Add finalAmount
     const userId = req.user.id;
+
+    console.log('🎯 Creating enrollment for:', { userId, courseId, couponCode, finalAmount });
 
     // Check if already enrolled
     const existingEnrollment = await Enrollment.findOne({
@@ -14,7 +16,9 @@ exports.createEnrollment = async (req, res) => {
     });
 
     if (existingEnrollment) {
+      console.log('⚠️ User already enrolled:', existingEnrollment);
       return res.status(400).json({
+        success: false,
         message: 'You are already enrolled in this course'
       });
     }
@@ -22,26 +26,42 @@ exports.createEnrollment = async (req, res) => {
     const course = await Course.findById(courseId);
     if (!course) {
       return res.status(404).json({
+        success: false,
         message: 'Course not found'
       });
     }
 
-    const enrollment = await Enrollment.create({
+    console.log('📚 Course found:', course.title, 'Price:', course.price, 'Final Amount:', finalAmount);
+
+    // Determine payment status based on final amount
+    const isFreeEnrollment = finalAmount === 0 || course.price === 0 || course.discountedPrice === 0;
+    
+    const enrollmentData = {
       user: userId,
       course: courseId,
-      amountPaid: course.discountedPrice || course.price
-    });
+      amountPaid: finalAmount === 0 ? 0 : (course.discountedPrice || course.price), // Use finalAmount if it's 0
+      paymentStatus: isFreeEnrollment ? 'completed' : 'pending', // Set completed for free enrollments
+      enrollmentDate: new Date()
+    };
+
+    console.log('📝 Creating enrollment with data:', enrollmentData);
+
+    const enrollment = await Enrollment.create(enrollmentData);
 
     // Update course enrollment count
     course.studentsEnrolled += 1;
     await course.save();
+
+    console.log('✅ Enrollment created successfully:', enrollment._id, 'Payment Status:', enrollment.paymentStatus);
 
     res.status(201).json({
       success: true,
       enrollment
     });
   } catch (error) {
+    console.error('❌ Error creating enrollment:', error);
     res.status(500).json({
+      success: false,
       message: 'Error creating enrollment',
       error: error.message
     });

@@ -1,122 +1,76 @@
-const Coupon = require('../models/Coupon');
+// controllers/couponController.js
+const Coupon = require('../models/coupon');
+const Course = require('../models/Course');
 
-// Get all coupons (admin only)
-exports.getCoupons = async (req, res) => {
-  try {
-    const coupons = await Coupon.find().sort({ createdAt: -1 });
-    
-    res.json({
-      success: true,
-      count: coupons.length,
-      coupons
-    });
-  } catch (error) {
-    res.status(500).json({
-      message: 'Error fetching coupons',
-      error: error.message
-    });
-  }
-};
-
-// Create coupon (admin only)
 exports.createCoupon = async (req, res) => {
   try {
-    const coupon = await Coupon.create(req.body);
-    
-    res.status(201).json({
-      success: true,
-      coupon
+    const { code, discountType, discountValue, minPurchase, maxDiscount, validFrom, validUntil, usageLimit } = req.body;
+
+    const coupon = await Coupon.create({
+      code,
+      discountType,
+      discountValue,
+      minPurchase,
+      maxDiscount,
+      validFrom,
+      validUntil,
+      usageLimit,
     });
+
+    res.status(201).json({ success: true, coupon });
   } catch (error) {
-    res.status(500).json({
-      message: 'Error creating coupon',
-      error: error.message
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// Validate coupon
+exports.getAllCoupons = async (req, res) => {
+  try {
+    const coupons = await Coupon.find().sort({ createdAt: -1 });
+    res.status(200).json({ success: true, coupons });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 exports.validateCoupon = async (req, res) => {
   try {
-    const { code, courseId } = req.body;
-    
-    const coupon = await Coupon.findOne({ 
-      code: code.toUpperCase(),
-      isActive: true,
-      validFrom: { $lte: new Date() },
-      validUntil: { $gte: new Date() }
-    });
+    const { code, totalAmount } = req.body;
+    const coupon = await Coupon.findOne({ code: code.toUpperCase(), isActive: true });
 
-    if (!coupon) {
-      return res.status(404).json({
-        message: 'Invalid or expired coupon code'
-      });
+    if (!coupon) return res.status(404).json({ success: false, message: 'Invalid coupon code' });
+
+    const now = new Date();
+    if (now < coupon.validFrom || now > coupon.validUntil) {
+      return res.status(400).json({ success: false, message: 'Coupon expired or not yet valid' });
     }
 
     if (coupon.usageLimit && coupon.usedCount >= coupon.usageLimit) {
-      return res.status(400).json({
-        message: 'Coupon usage limit reached'
-      });
+      return res.status(400).json({ success: false, message: 'Coupon usage limit reached' });
     }
 
-    res.json({
-      success: true,
-      coupon
-    });
-  } catch (error) {
-    res.status(500).json({
-      message: 'Error validating coupon',
-      error: error.message
-    });
-  }
-};
-
-// Update coupon (admin only)
-exports.updateCoupon = async (req, res) => {
-  try {
-    const coupon = await Coupon.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
-
-    if (!coupon) {
-      return res.status(404).json({
-        message: 'Coupon not found'
-      });
+    if (coupon.minPurchase && totalAmount < coupon.minPurchase) {
+      return res.status(400).json({ success: false, message: `Minimum purchase of ₹${coupon.minPurchase} required` });
     }
 
-    res.json({
-      success: true,
-      coupon
-    });
-  } catch (error) {
-    res.status(500).json({
-      message: 'Error updating coupon',
-      error: error.message
-    });
-  }
-};
-
-// Delete coupon (admin only)
-exports.deleteCoupon = async (req, res) => {
-  try {
-    const coupon = await Coupon.findByIdAndDelete(req.params.id);
-
-    if (!coupon) {
-      return res.status(404).json({
-        message: 'Coupon not found'
-      });
+    let discountAmount = 0;
+    if (coupon.discountType === 'percentage') {
+      discountAmount = (totalAmount * coupon.discountValue) / 100;
+      if (coupon.maxDiscount && discountAmount > coupon.maxDiscount) {
+        discountAmount = coupon.maxDiscount;
+      }
+    } else {
+      discountAmount = coupon.discountValue;
     }
 
-    res.json({
+    const finalAmount = totalAmount - discountAmount;
+
+    res.status(200).json({
       success: true,
-      message: 'Coupon deleted successfully'
+      coupon,
+      discountAmount,
+      finalAmount
     });
   } catch (error) {
-    res.status(500).json({
-      message: 'Error deleting coupon',
-      error: error.message
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };

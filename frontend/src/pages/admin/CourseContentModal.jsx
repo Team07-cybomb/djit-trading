@@ -1,483 +1,214 @@
-import React, { useState, useEffect } from 'react'
-import { Modal, Form, Button, Row, Col, Badge, Card, Alert } from 'react-bootstrap'
-import axios from 'axios'
+import React, { useState, useEffect } from "react";
+import { Modal, Form, Button, Row, Col, Badge, Card, Alert, Spinner } from "react-bootstrap";
+import axios from "axios";
 
 const CourseContentModal = ({ show, onHide, selectedCourse, showAlert, onContentAdded }) => {
-  const [uploadLoading, setUploadLoading] = useState(false)
-  const [contentFormData, setContentFormData] = useState({
-    title: '',
-    description: '',
-    type: 'video',
-    videoUrl: '',
-    documentUrl: '',
-    duration: '',
-    order: 1,
-    isFree: false
-  })
-  const [videoFile, setVideoFile] = useState(null)
-  const [documentFile, setDocumentFile] = useState(null)
-  const [localAlert, setLocalAlert] = useState({ show: false, message: '', type: '' })
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [contentFormData, setContentFormData] = useState(initialFormData());
+  const [videoFile, setVideoFile] = useState(null);
+  const [documentFile, setDocumentFile] = useState(null);
+  const [localAlert, setLocalAlert] = useState({ show: false, message: "", type: "" });
 
-  // Get authentication token
-  const getAuthToken = () => {
-    return localStorage.getItem('adminToken') || localStorage.getItem('token')
+  function initialFormData() {
+    return { title: "", description: "", type: "video", videoUrl: "", documentUrl: "", duration: "", order: 1, isFree: false };
   }
 
-  // Create axios instance with auth header
-  const api = axios.create({
-    baseURL: 'http://localhost:5000/api' // Use full URL to avoid proxy issues
-  })
+  const getAuthToken = () => localStorage.getItem("adminToken") || localStorage.getItem("token");
 
-  // Add request interceptor to include auth token
-  api.interceptors.request.use(
-    (config) => {
-      const token = getAuthToken()
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
-      }
-      return config
-    },
-    (error) => {
-      return Promise.reject(error)
-    }
-  )
+  const api = axios.create({ baseURL: "http://localhost:5000/api" });
+  api.interceptors.request.use((config) => {
+    const token = getAuthToken();
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+    return config;
+  });
 
   useEffect(() => {
     if (selectedCourse && show) {
-      // Reset form when modal opens
-      setContentFormData({
-        title: '',
-        description: '',
-        type: 'video',
-        videoUrl: '',
-        documentUrl: '',
-        duration: '',
-        order: 1,
-        isFree: false
-      })
-      setVideoFile(null)
-      setDocumentFile(null)
+      setContentFormData(initialFormData());
+      setVideoFile(null);
+      setDocumentFile(null);
     }
-  }, [selectedCourse, show])
+  }, [selectedCourse, show]);
 
   const showLocalAlert = (message, type) => {
-    setLocalAlert({ show: true, message, type })
-    setTimeout(() => setLocalAlert({ show: false, message: '', type: '' }), 5000)
-  }
+    setLocalAlert({ show: true, message, type });
+    setTimeout(() => setLocalAlert({ show: false, message: "", type: "" }), 4000);
+  };
 
   const handleContentSubmit = async (e) => {
-    e.preventDefault()
-    if (!selectedCourse) {
-      showLocalAlert('No course selected', 'danger')
-      return
-    }
-
-    // Basic validation
-    if (!contentFormData.title.trim()) {
-      showLocalAlert('Please enter a content title', 'danger')
-      return
-    }
-
-    if (contentFormData.type === 'video' && !videoFile && !contentFormData.videoUrl) {
-      showLocalAlert('Please provide either a video file or video URL', 'danger')
-      return
-    }
-
-    if ((contentFormData.type === 'document' || contentFormData.type === 'pdf') && !documentFile && !contentFormData.documentUrl) {
-      showLocalAlert('Please provide either a document file or document URL', 'danger')
-      return
-    }
+    e.preventDefault();
+    if (!selectedCourse) return showLocalAlert("No course selected", "danger");
+    if (!contentFormData.title.trim()) return showLocalAlert("Please enter a content title", "danger");
+    if (contentFormData.type === "video" && !videoFile && !contentFormData.videoUrl.trim())
+      return showLocalAlert("Please upload a video file or enter a video URL", "danger");
+    if ((contentFormData.type === "document" || contentFormData.type === "pdf") && !documentFile && !contentFormData.documentUrl.trim())
+      return showLocalAlert("Please upload a document or provide a document URL", "danger");
 
     try {
-      setUploadLoading(true)
-      
-      const formData = new FormData()
-      
-      // Append form data
-      formData.append('title', contentFormData.title.trim())
-      formData.append('description', contentFormData.description.trim())
-      formData.append('type', contentFormData.type)
-      formData.append('duration', contentFormData.duration.trim())
-      formData.append('order', contentFormData.order.toString())
-      formData.append('isFree', contentFormData.isFree.toString())
-      
-      // Append URLs if no files
-      if (!videoFile && contentFormData.videoUrl) {
-        formData.append('videoUrl', contentFormData.videoUrl.trim())
-      }
-      if (!documentFile && contentFormData.documentUrl) {
-        formData.append('documentUrl', contentFormData.documentUrl.trim())
-      }
-      
-      // Append files
-      if (videoFile) {
-        formData.append('videoFile', videoFile)
-        console.log('📤 Appending video file:', videoFile.name)
-      }
-      if (documentFile) {
-        formData.append('documentFile', documentFile)
-        console.log('📤 Appending document file:', documentFile.name)
-      }
+      setUploadLoading(true);
+      const formData = new FormData();
+      Object.entries(contentFormData).forEach(([key, value]) => formData.append(key, value));
+      formData.append("courseId", selectedCourse._id);
+      if (videoFile) formData.append("videoFile", videoFile);
+      if (documentFile) formData.append("documentFile", documentFile);
 
-      console.log('🚀 Submitting content for course:', selectedCourse._id)
-      console.log('📦 FormData entries:')
-      for (let [key, value] of formData.entries()) {
-        console.log(`  ${key}:`, value instanceof File ? `${value.name} (${value.size} bytes)` : value)
-      }
+      const res = await api.post("/course-content/upload", formData, { headers: { "Content-Type": "multipart/form-data" }, timeout: 300000 });
 
-      const response = await api.post(`/admin/courses/${selectedCourse._id}/content`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        },
-        timeout: 300000 // 5 minutes timeout for large files
-      })
-      
-      console.log('✅ Content added successfully:', response.data)
-      
-      showAlert('Content added successfully', 'success')
-      showLocalAlert('Content added successfully', 'success')
-      
-      // Reset form for next content
-      setContentFormData(prev => ({
-        title: '',
-        description: '',
-        type: 'video',
-        videoUrl: '',
-        documentUrl: '',
-        duration: '',
-        order: prev.order + 1, // Increment order for next item
-        isFree: false
-      }))
-      setVideoFile(null)
-      setDocumentFile(null)
-      
-      // Reset file inputs
-      const videoInput = document.getElementById('videoFileInput')
-      const documentInput = document.getElementById('documentFileInput')
-      if (videoInput) videoInput.value = ''
-      if (documentInput) documentInput.value = ''
-      
-      // Notify parent component that content was added
-      if (onContentAdded) {
-        onContentAdded(response.data.content)
-      }
-      
+      showAlert("Content added successfully", "success");
+      showLocalAlert("Content added successfully", "success");
+
+      setContentFormData((prev) => ({ ...initialFormData(), order: prev.order + 1 }));
+      setVideoFile(null);
+      setDocumentFile(null);
+
+      // ✅ Safe replacement for optional chaining
+      const videoInput = document.getElementById("videoFileInput");
+      if (videoInput) videoInput.value = "";
+      const documentInput = document.getElementById("documentFileInput");
+      if (documentInput) documentInput.value = "";
+
+      if (onContentAdded) onContentAdded(res.data.content);
     } catch (error) {
-      console.error('❌ Error adding content:', error)
-      let errorMessage = 'Error adding content'
-      
+      console.error("Upload error:", error);
+      let msg = "Error adding content";
       if (error.response) {
-        console.error('Response error:', error.response.data)
-        errorMessage = error.response.data?.message || `Error: ${error.response.status}`
-        
-        // Handle specific error cases
-        if (error.response.status === 413) {
-          errorMessage = 'File too large. Please check file size limits.'
-        } else if (error.response.status === 415) {
-          errorMessage = 'Unsupported file type. Please check file format.'
-        } else if (error.response.status === 500) {
-          errorMessage = 'Server error. Please check server logs.'
-        }
-      } else if (error.request) {
-        console.error('Request error:', error.request)
-        errorMessage = 'Network error - cannot reach server. Make sure backend is running on port 5000.'
-      } else {
-        errorMessage = error.message
-      }
-      
-      showAlert(errorMessage, 'danger')
-      showLocalAlert(errorMessage, 'danger')
+        msg = error.response.data?.message || `Server error: ${error.response.status}`;
+        if (error.response.status === 413) msg = "File too large.";
+        if (error.response.status === 415) msg = "Unsupported file type.";
+      } else if (error.request) msg = "Network error. Backend not reachable.";
+      else msg = error.message;
+      showAlert(msg, "danger");
+      showLocalAlert(msg, "danger");
     } finally {
-      setUploadLoading(false)
+      setUploadLoading(false);
     }
-  }
+  };
 
   const handleVideoFileChange = (e) => {
-    const file = e.target.files[0]
-    if (file) {
-      // Validate file type and size
-      if (!file.type.startsWith('video/')) {
-        showLocalAlert('Please select a valid video file', 'danger')
-        e.target.value = ''
-        return
-      }
-      if (file.size > 500 * 1024 * 1024) {
-        showLocalAlert('Video file too large. Maximum size is 500MB.', 'danger')
-        e.target.value = ''
-        return
-      }
-      setVideoFile(file)
-      setContentFormData(prev => ({ ...prev, videoUrl: '' }))
-      showLocalAlert(`Video file selected: ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`, 'info')
-    }
-  }
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith("video/")) return showLocalAlert("Please select a valid video file", "danger");
+    if (file.size > 500 * 1024 * 1024) return showLocalAlert("Max video size is 500MB", "danger");
+    setVideoFile(file);
+    setContentFormData((p) => ({ ...p, videoUrl: "" }));
+    showLocalAlert(`Video selected: ${file.name} (${(file.size / 1048576).toFixed(2)} MB)`, "info");
+  };
 
   const handleDocumentFileChange = (e) => {
-    const file = e.target.files[0]
-    if (file) {
-      // Validate file type
-      const allowedTypes = [
-        'application/pdf',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'application/vnd.ms-powerpoint',
-        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'text/plain'
-      ]
-      
-      if (!allowedTypes.includes(file.type)) {
-        showLocalAlert('Please select a valid document file (PDF, Word, PowerPoint, Text)', 'danger')
-        e.target.value = ''
-        return
-      }
-      
-      if (file.size > 50 * 1024 * 1024) {
-        showLocalAlert('Document file too large. Maximum size is 50MB.', 'danger')
-        e.target.value = ''
-        return
-      }
-      
-      setDocumentFile(file)
-      setContentFormData(prev => ({ ...prev, documentUrl: '' }))
-      showLocalAlert(`Document file selected: ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`, 'info')
+    const file = e.target.files[0];
+    if (!file) return;
+    const allowed = ["application/pdf","application/msword","application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/vnd.ms-powerpoint","application/vnd.openxmlformats-officedocument.presentationml.presentation","text/plain"];
+    if (!allowed.includes(file.type)) return showLocalAlert("Invalid file. Allowed: PDF, Word, PPT, Text", "danger");
+    if (file.size > 50 * 1024 * 1024) return showLocalAlert("Max document size is 50MB", "danger");
+    setDocumentFile(file);
+    setContentFormData((p) => ({ ...p, documentUrl: "" }));
+    showLocalAlert(`Document selected: ${file.name} (${(file.size / 1048576).toFixed(2)} MB)`, "info");
+  };
+
+  const clearFile = (type) => {
+    if (type === "video") {
+      setVideoFile(null);
+      const videoInput = document.getElementById("videoFileInput");
+      if (videoInput) videoInput.value = "";
+    } else {
+      setDocumentFile(null);
+      const documentInput = document.getElementById("documentFileInput");
+      if (documentInput) documentInput.value = "";
     }
-  }
+  };
 
   const handleModalClose = () => {
-    // Reset all states when modal closes
-    setContentFormData({
-      title: '',
-      description: '',
-      type: 'video',
-      videoUrl: '',
-      documentUrl: '',
-      duration: '',
-      order: 1,
-      isFree: false
-    })
-    setVideoFile(null)
-    setDocumentFile(null)
-    setLocalAlert({ show: false, message: '', type: '' })
-    onHide()
-  }
-
-  const clearFile = (fileType) => {
-    if (fileType === 'video') {
-      setVideoFile(null)
-      const videoInput = document.getElementById('videoFileInput')
-      if (videoInput) videoInput.value = ''
-    } else if (fileType === 'document') {
-      setDocumentFile(null)
-      const documentInput = document.getElementById('documentFileInput')
-      if (documentInput) documentInput.value = ''
-    }
-  }
+    setContentFormData(initialFormData());
+    setVideoFile(null);
+    setDocumentFile(null);
+    setLocalAlert({ show: false, message: "", type: "" });
+    onHide();
+  };
 
   return (
     <Modal show={show} onHide={handleModalClose} size="lg" backdrop="static" keyboard={false}>
       <Modal.Header closeButton>
-        <Modal.Title>
-          Add Content - {selectedCourse?.title}
-        </Modal.Title>
+        <Modal.Title>Add Content {selectedCourse ? ` - ${selectedCourse.title}` : ""}</Modal.Title>
       </Modal.Header>
       <Modal.Body>
-        {localAlert.show && (
-          <Alert variant={localAlert.type} dismissible onClose={() => setLocalAlert({ show: false, message: '', type: '' })}>
-            {localAlert.message}
-          </Alert>
-        )}
-
+        {localAlert.show && <Alert variant={localAlert.type} dismissible onClose={() => setLocalAlert({ show: false, message: "", type: "" })}>{localAlert.message}</Alert>}
         <Card>
-          <Card.Header>
-            <h6 className="mb-0">Add New Content</h6>
-          </Card.Header>
+          <Card.Header><h6 className="mb-0">Add New Content</h6></Card.Header>
           <Card.Body>
             <Form onSubmit={handleContentSubmit}>
+              {/* Title & Description */}
               <Form.Group className="mb-3">
                 <Form.Label>Content Title *</Form.Label>
-                <Form.Control
-                  type="text"
-                  value={contentFormData.title}
-                  onChange={(e) => setContentFormData({ ...contentFormData, title: e.target.value })}
-                  required
-                  placeholder="Enter content title"
-                />
+                <Form.Control type="text" value={contentFormData.title} onChange={(e) => setContentFormData({ ...contentFormData, title: e.target.value })} placeholder="Enter content title" required />
               </Form.Group>
-
               <Form.Group className="mb-3">
                 <Form.Label>Description</Form.Label>
-                <Form.Control
-                  as="textarea"
-                  rows={2}
-                  value={contentFormData.description}
-                  onChange={(e) => setContentFormData({ ...contentFormData, description: e.target.value })}
-                  placeholder="Enter content description (optional)"
-                />
+                <Form.Control as="textarea" rows={2} value={contentFormData.description} onChange={(e) => setContentFormData({ ...contentFormData, description: e.target.value })} placeholder="Optional description" />
               </Form.Group>
 
+              {/* Type & Order */}
               <Row>
-                <Col md={6}>
-                  <Form.Group className="mb-3">
-                    <Form.Label>Content Type *</Form.Label>
-                    <Form.Select
-                      value={contentFormData.type}
-                      onChange={(e) => setContentFormData({ ...contentFormData, type: e.target.value })}
-                    >
-                      <option value="video">Video</option>
-                      <option value="document">Document</option>
-                      <option value="pdf">PDF</option>
-                      <option value="quiz">Quiz</option>
-                      <option value="assignment">Assignment</option>
-                    </Form.Select>
-                  </Form.Group>
-                </Col>
-                <Col md={6}>
-                  <Form.Group className="mb-3">
-                    <Form.Label>Order *</Form.Label>
-                    <Form.Control
-                      type="number"
-                      value={contentFormData.order}
-                      onChange={(e) => setContentFormData({ ...contentFormData, order: parseInt(e.target.value) || 1 })}
-                      min="1"
-                      required
-                    />
-                  </Form.Group>
-                </Col>
+                <Col md={6}><Form.Group className="mb-3">
+                  <Form.Label>Content Type *</Form.Label>
+                  <Form.Select value={contentFormData.type} onChange={(e) => setContentFormData({ ...contentFormData, type: e.target.value })}>
+                    <option value="video">Video</option>
+                    <option value="document">Document</option>
+                    <option value="pdf">PDF</option>
+                    <option value="quiz">Quiz</option>
+                    <option value="assignment">Assignment</option>
+                  </Form.Select>
+                </Form.Group></Col>
+                <Col md={6}><Form.Group className="mb-3">
+                  <Form.Label>Order *</Form.Label>
+                  <Form.Control type="number" min="1" value={contentFormData.order} onChange={(e) => setContentFormData({ ...contentFormData, order: parseInt(e.target.value) || 1 })} required />
+                </Form.Group></Col>
               </Row>
 
-              {/* File Upload for Videos */}
-              {contentFormData.type === 'video' && (
-                <>
-                  <Form.Group className="mb-3">
-                    <Form.Label>Upload Video File</Form.Label>
-                    <Form.Control
-                      id="videoFileInput"
-                      type="file"
-                      accept="video/*"
-                      onChange={handleVideoFileChange}
-                    />
-                    <Form.Text className="text-muted">
-                      Supported formats: MP4, AVI, MOV, etc. Max size: 500MB
-                    </Form.Text>
-                    {videoFile && (
-                      <div className="mt-2 d-flex align-items-center gap-2">
-                        <Badge bg="info" className="flex-grow-1">
-                          Selected: {videoFile.name} ({(videoFile.size / (1024 * 1024)).toFixed(2)} MB)
-                        </Badge>
-                        <Button
-                          size="sm"
-                          variant="outline-danger"
-                          onClick={() => clearFile('video')}
-                        >
-                          ×
-                        </Button>
-                      </div>
-                    )}
-                  </Form.Group>
-                  
-                  <Form.Group className="mb-3">
-                    <Form.Label>Or Video URL</Form.Label>
-                    <Form.Control
-                      type="url"
-                      value={contentFormData.videoUrl}
-                      onChange={(e) => setContentFormData({ ...contentFormData, videoUrl: e.target.value })}
-                      placeholder="https://youtube.com/embed/..."
-                      disabled={!!videoFile}
-                    />
-                    <Form.Text className="text-muted">
-                      Use embedded URL for YouTube videos
-                    </Form.Text>
-                  </Form.Group>
-                </>
-              )}
+              {/* Video */}
+              {contentFormData.type === "video" && <>
+                <Form.Group className="mb-3">
+                  <Form.Label>Upload Video</Form.Label>
+                  <Form.Control id="videoFileInput" type="file" accept="video/*" onChange={handleVideoFileChange} />
+                  <Form.Text>Max 500MB. MP4/AVI/MOV</Form.Text>
+                  {videoFile && <div className="mt-2 d-flex gap-2"><Badge bg="info" className="flex-grow-1 text-truncate">{videoFile.name} ({(videoFile.size / 1048576).toFixed(2)} MB)</Badge><Button size="sm" variant="outline-danger" onClick={() => clearFile("video")}>×</Button></div>}
+                </Form.Group>
+                <Form.Group className="mb-3">
+                  <Form.Label>Or Video URL</Form.Label>
+                  <Form.Control type="url" placeholder="https://youtube.com/embed/..." value={contentFormData.videoUrl} onChange={(e) => setContentFormData({ ...contentFormData, videoUrl: e.target.value })} disabled={!!videoFile} />
+                </Form.Group>
+              </>}
 
-              {/* File Upload for Documents */}
-              {(contentFormData.type === 'document' || contentFormData.type === 'pdf') && (
-                <>
-                  <Form.Group className="mb-3">
-                    <Form.Label>Upload Document</Form.Label>
-                    <Form.Control
-                      id="documentFileInput"
-                      type="file"
-                      accept=".pdf,.doc,.docx,.ppt,.pptx,.txt"
-                      onChange={handleDocumentFileChange}
-                    />
-                    <Form.Text className="text-muted">
-                      Supported formats: PDF, Word, PowerPoint, Text. Max size: 50MB
-                    </Form.Text>
-                    {documentFile && (
-                      <div className="mt-2 d-flex align-items-center gap-2">
-                        <Badge bg="info" className="flex-grow-1">
-                          Selected: {documentFile.name} ({(documentFile.size / (1024 * 1024)).toFixed(2)} MB)
-                        </Badge>
-                        <Button
-                          size="sm"
-                          variant="outline-danger"
-                          onClick={() => clearFile('document')}
-                        >
-                          ×
-                        </Button>
-                      </div>
-                    )}
-                  </Form.Group>
-                  
-                  <Form.Group className="mb-3">
-                    <Form.Label>Or Document URL</Form.Label>
-                    <Form.Control
-                      type="url"
-                      value={contentFormData.documentUrl}
-                      onChange={(e) => setContentFormData({ ...contentFormData, documentUrl: e.target.value })}
-                      placeholder="https://example.com/document.pdf"
-                      disabled={!!documentFile}
-                    />
-                  </Form.Group>
-                </>
-              )}
+              {/* Document */}
+              {(contentFormData.type === "document" || contentFormData.type === "pdf") && <>
+                <Form.Group className="mb-3">
+                  <Form.Label>Upload Document</Form.Label>
+                  <Form.Control id="documentFileInput" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.txt" onChange={handleDocumentFileChange} />
+                  <Form.Text>Max 50MB. PDF/Word/PPT/Text</Form.Text>
+                  {documentFile && <div className="mt-2 d-flex gap-2"><Badge bg="info" className="flex-grow-1 text-truncate">{documentFile.name} ({(documentFile.size / 1048576).toFixed(2)} MB)</Badge><Button size="sm" variant="outline-danger" onClick={() => clearFile("document")}>×</Button></div>}
+                </Form.Group>
+                <Form.Group className="mb-3">
+                  <Form.Label>Or Document URL</Form.Label>
+                  <Form.Control type="url" placeholder="https://example.com/doc.pdf" value={contentFormData.documentUrl} onChange={(e) => setContentFormData({ ...contentFormData, documentUrl: e.target.value })} disabled={!!documentFile} />
+                </Form.Group>
+              </>}
 
+              {/* Duration & Free */}
               <Form.Group className="mb-3">
                 <Form.Label>Duration</Form.Label>
-                <Form.Control
-                  type="text"
-                  value={contentFormData.duration}
-                  onChange={(e) => setContentFormData({ ...contentFormData, duration: e.target.value })}
-                  placeholder="e.g., 15 minutes (optional)"
-                />
+                <Form.Control type="text" placeholder="Optional" value={contentFormData.duration} onChange={(e) => setContentFormData({ ...contentFormData, duration: e.target.value })} />
               </Form.Group>
+              <Form.Check type="checkbox" label="Free Preview" checked={contentFormData.isFree} onChange={(e) => setContentFormData({ ...contentFormData, isFree: e.target.checked })} className="mb-3" />
 
-              <Form.Check
-                type="checkbox"
-                label="Free Preview (Available without enrollment)"
-                checked={contentFormData.isFree}
-                onChange={(e) => setContentFormData({ ...contentFormData, isFree: e.target.checked })}
-                className="mb-3"
-              />
-
-              <Button 
-                type="submit" 
-                variant="primary" 
-                disabled={uploadLoading}
-                className="w-100"
-              >
-                {uploadLoading ? (
-                  <>
-                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                    Adding Content...
-                  </>
-                ) : (
-                  'Add Content'
-                )}
+              <Button type="submit" variant="primary" disabled={uploadLoading} className="w-100">
+                {uploadLoading ? <><Spinner as="span" animation="border" size="sm" className="me-2"/>Uploading...</> : "Add Content"}
               </Button>
             </Form>
           </Card.Body>
         </Card>
       </Modal.Body>
-      <Modal.Footer>
-        <Button variant="secondary" onClick={handleModalClose}>
-          Close
-        </Button>
-      </Modal.Footer>
+      <Modal.Footer><Button variant="secondary" onClick={handleModalClose}>Close</Button></Modal.Footer>
     </Modal>
-  )
-}
+  );
+};
 
-export default CourseContentModal
+export default CourseContentModal;

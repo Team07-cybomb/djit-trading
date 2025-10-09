@@ -93,18 +93,57 @@ const Courses = () => {
   };
 
   const validateCoupon = async () => {
-    if (!couponCode.trim() || !selectedCourse) {
-      setValidatedCoupon(null);
-      return;
-    }
+  if (!couponCode.trim() || !selectedCourse) {
+    setValidatedCoupon(null);
+    return;
+  }
 
-    setCouponLoading(true);
-    try {
-      const response = await axios.post(
-        "/api/coupons/validate",
+  setCouponLoading(true);
+  try {
+    const totalAmount = selectedCourse.discountedPrice || selectedCourse.price;
+    
+    const response = await axios.post(
+      "/api/coupons/validate",
+      {
+        code: couponCode,
+        totalAmount: totalAmount, // Send totalAmount instead of courseId
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      }
+    );
+
+    setValidatedCoupon(response.data);
+    showAlert("Coupon applied successfully!", "success");
+  } catch (error) {
+    setValidatedCoupon(null);
+    showAlert(
+      error.response?.data?.message || "Invalid coupon code",
+      "danger"
+    );
+  } finally {
+    setCouponLoading(false);
+  }
+};
+
+  const handleEnrollConfirm = async () => {
+  if (!selectedCourse) return;
+
+  setEnrolling(true);
+  try {
+    const finalPrice = calculateFinalPrice();
+    
+    // Check if course is free OR if coupon makes it free OR final price is 0
+    if (isCourseFree(selectedCourse) || finalPrice === 0) {
+      // Direct enrollment for free courses or zero-priced courses after coupon
+      await axios.post(
+        "/api/enrollments",
         {
-          code: couponCode,
           courseId: selectedCourse._id,
+          couponCode: validatedCoupon?.coupon?.code || couponCode,
+          finalAmount: finalPrice
         },
         {
           headers: {
@@ -113,31 +152,25 @@ const Courses = () => {
         }
       );
 
-      setValidatedCoupon(response.data.coupon);
-      showAlert("Coupon applied successfully!", "success");
-    } catch (error) {
-      setValidatedCoupon(null);
-      showAlert(
-        error.response?.data?.message || "Invalid coupon code",
-        "danger"
-      );
-    } finally {
-      setCouponLoading(false);
-    }
-  };
+      showAlert("Enrolled successfully! Redirecting to course...", "success");
+      setShowEnrollModal(false);
 
-  const handleEnrollConfirm = async () => {
-    if (!selectedCourse) return;
-
-    setEnrolling(true);
-    try {
-      // Check if course is free
-      if (isCourseFree(selectedCourse)) {
-        // Direct enrollment for free courses
+      // Redirect immediately to learning page
+      setTimeout(() => {
+        navigate(`/learning/${selectedCourse._id}`);
+      }, 1500);
+    } else {
+      // For paid courses in local development, simulate successful enrollment
+      // Remove this in production and use the actual payment flow
+      if (process.env.NODE_ENV === 'development') {
+        console.log("Local development: Simulating enrollment without payment");
+        
         await axios.post(
           "/api/enrollments",
           {
             courseId: selectedCourse._id,
+            couponCode: validatedCoupon?.coupon?.code || couponCode,
+            isFreeEnrollment: calculateFinalPrice() === 0
           },
           {
             headers: {
@@ -151,14 +184,15 @@ const Courses = () => {
 
         setTimeout(() => {
           navigate(`/learning/${selectedCourse._id}`);
-        }, 2000);
+        }, 1500);
       } else {
-        // Paid course - create payment order
+        // Production payment flow (your existing code)
         const paymentResponse = await axios.post(
           "/api/payments/create-order",
           {
             courseId: selectedCourse._id,
-            couponCode: validatedCoupon?.code,
+            couponCode: validatedCoupon?.coupon?.code || couponCode,
+            finalAmount: finalPrice,
           },
           {
             headers: {
@@ -172,20 +206,21 @@ const Courses = () => {
         // Initialize Razorpay
         const options = {
           key: process.env.REACT_APP_RAZORPAY_KEY_ID,
-          amount: payment.amount * 100, // Convert to paise
+          amount: payment.amount * 100,
           currency: payment.currency,
           name: "Trading Course Platform",
           description: selectedCourse.title,
           order_id: order.id,
           handler: async function (response) {
             try {
-              // Verify payment
               await axios.post(
                 "/api/payments/verify",
                 {
                   paymentId: response.razorpay_payment_id,
                   orderId: response.razorpay_order_id,
                   signature: response.razorpay_signature,
+                  courseId: selectedCourse._id,
+                  couponCode: validatedCoupon?.coupon?.code || couponCode,
                 },
                 {
                   headers: {
@@ -194,22 +229,15 @@ const Courses = () => {
                 }
               );
 
-              showAlert(
-                "Enrollment successful! Redirecting to course...",
-                "success"
-              );
+              showAlert("Enrollment successful! Redirecting to course...", "success");
               setShowEnrollModal(false);
 
-              // Redirect to course page after 2 seconds
               setTimeout(() => {
                 navigate(`/learning/${selectedCourse._id}`);
               }, 2000);
             } catch (error) {
               console.error("Payment verification failed:", error);
-              showAlert(
-                "Payment verification failed. Please contact support.",
-                "danger"
-              );
+              showAlert("Payment verification failed. Please contact support.", "danger");
             }
           },
           prefill: {
@@ -229,16 +257,17 @@ const Courses = () => {
         const razorpay = new window.Razorpay(options);
         razorpay.open();
       }
-    } catch (error) {
-      console.error("Enrollment error:", error);
-      showAlert(
-        error.response?.data?.message || "Enrollment failed. Please try again.",
-        "danger"
-      );
-    } finally {
-      setEnrolling(false);
     }
-  };
+  } catch (error) {
+    console.error("Enrollment error:", error);
+    showAlert(
+      error.response?.data?.message || "Enrollment failed. Please try again.",
+      "danger"
+    );
+  } finally {
+    setEnrolling(false);
+  }
+};
 
   const showAlert = (message, type) => {
     setAlert({ show: true, message, type });
@@ -251,22 +280,18 @@ const Courses = () => {
     return course.price === 0 || course.discountedPrice === 0;
   };
 
-  const calculateFinalPrice = () => {
-    if (!selectedCourse) return 0;
+ const calculateFinalPrice = () => {
+  if (!selectedCourse) return 0;
 
-    let price = selectedCourse.discountedPrice || selectedCourse.price;
+  let price = selectedCourse.discountedPrice || selectedCourse.price;
 
-    if (validatedCoupon) {
-      if (validatedCoupon.discountType === "percentage") {
-        const discount = (price * validatedCoupon.discountValue) / 100;
-        price -= Math.min(discount, validatedCoupon.maxDiscount || discount);
-      } else {
-        price -= validatedCoupon.discountValue;
-      }
-    }
+  if (validatedCoupon && validatedCoupon.success) {
+    // Use the discountAmount calculated by the backend
+    price = validatedCoupon.finalAmount;
+  }
 
-    return Math.max(0, price);
-  };
+  return Math.max(0, price);
+};
 
   const categories = [...new Set(courses.map((course) => course.category))];
   const levels = ["Beginner", "Intermediate", "Advanced"];
@@ -565,82 +590,100 @@ const Courses = () => {
             <Modal.Title>Enroll in Course</Modal.Title>
           </Modal.Header>
           <Modal.Body>
-            {selectedCourse && ( // Added safety check
-              <div className={styles.enrollModalContent}>
-                <div className={styles.courseInfo}>
-                  <h5>{selectedCourse.title}</h5>
-                  <p className="text-muted">{selectedCourse.instructor}</p>
-                </div>
+  {selectedCourse && (
+    <div className={styles.enrollModalContent}>
+      <div className={styles.courseInfo}>
+        <h5>{selectedCourse.title}</h5>
+        <p className="text-muted">{selectedCourse.instructor}</p>
+      </div>
 
-                <div className={styles.pricingSection}>
-                  <div className={styles.originalPriceLine}>
-                    <span>Course Price:</span>
-                    <span>
-                      ₹{selectedCourse.discountedPrice || selectedCourse.price}
-                    </span>
-                  </div>
+      <div className={styles.pricingSection}>
+        <div className={styles.originalPriceLine}>
+          <span>Course Price:</span>
+          <span>
+            ₹{selectedCourse.discountedPrice || selectedCourse.price}
+          </span>
+        </div>
 
-                  {validatedCoupon && (
-                    <div className={styles.couponDiscount}>
-                      <span>Coupon Discount:</span>
-                      <span className={styles.discountText}>
-                        -₹
-                        {(
-                          (selectedCourse.discountedPrice ||
-                            selectedCourse.price) - calculateFinalPrice()
-                        ).toFixed(2)}
-                      </span>
-                    </div>
-                  )}
+        {/* Step 4: Updated Coupon Discount Display */}
+        {validatedCoupon && validatedCoupon.success && (
+          <div className={styles.couponDiscount}>
+            <span>Coupon Discount:</span>
+            <span className={styles.discountText}>
+              -₹{validatedCoupon.discountAmount.toFixed(2)}
+              {validatedCoupon.coupon.discountType === 'percentage' && 
+                ` (${validatedCoupon.coupon.discountValue}%)`
+              }
+            </span>
+          </div>
+        )}
 
-                  <hr />
-                  <div className={styles.finalPrice}>
-                    <strong>Final Price:</strong>
-                    <strong>₹{calculateFinalPrice()}</strong>
-                  </div>
-                </div>
-
-                {!isCourseFree(selectedCourse) && ( // This is safe now
-                  <div className={styles.couponSection}>
-                    <Form.Group>
-                      <Form.Label>Have a coupon code?</Form.Label>
-                      <InputGroup>
-                        <Form.Control
-                          type="text"
-                          placeholder="Enter coupon code"
-                          value={couponCode}
-                          onChange={(e) => setCouponCode(e.target.value)}
-                          disabled={couponLoading}
-                        />
-                        <Button
-                          variant="outline-primary"
-                          onClick={validateCoupon}
-                          disabled={couponLoading || !couponCode.trim()}
-                        >
-                          {couponLoading ? (
-                            <Spinner animation="border" size="sm" />
-                          ) : (
-                            "Apply"
-                          )}
-                        </Button>
-                      </InputGroup>
-                    </Form.Group>
-                  </div>
-                )}
-
-                <div className={styles.enrollBenefits}>
-                  <h6>What you'll get:</h6>
-                  <ul>
-                    <li>Lifetime access to course content</li>
-                    <li>Certificate of completion</li>
-                    <li>Q&A support</li>
-                    <li>Downloadable resources</li>
-                    <li>Mobile and TV access</li>
-                  </ul>
-                </div>
-              </div>
+        <hr />
+        
+        {/* Step 5: Updated Final Price Display */}
+        <div className={styles.finalPrice}>
+          <strong>Final Price:</strong>
+          <strong>
+            {calculateFinalPrice() === 0 ? (
+              <span className={styles.freePrice}>FREE</span>
+            ) : (
+              `₹${calculateFinalPrice().toFixed(2)}`
             )}
-          </Modal.Body>
+          </strong>
+        </div>
+      </div>
+
+      {!isCourseFree(selectedCourse) && (
+        <div className={styles.couponSection}>
+          <Form.Group>
+            <Form.Label>Have a coupon code?</Form.Label>
+            <InputGroup>
+              <Form.Control
+                type="text"
+                placeholder="Enter coupon code"
+                value={couponCode}
+                onChange={(e) => setCouponCode(e.target.value)}
+                disabled={couponLoading}
+              />
+              <Button
+                variant="outline-primary"
+                onClick={validateCoupon}
+                disabled={couponLoading || !couponCode.trim()}
+              >
+                {couponLoading ? (
+                  <Spinner animation="border" size="sm" />
+                ) : (
+                  "Apply"
+                )}
+              </Button>
+            </InputGroup>
+            {validatedCoupon && validatedCoupon.success && (
+              <Form.Text className="text-success">
+                ✅ Coupon applied successfully! You saved ₹{validatedCoupon.discountAmount.toFixed(2)}
+              </Form.Text>
+            )}
+            {validatedCoupon && !validatedCoupon.success && (
+              <Form.Text className="text-danger">
+                ❌ {validatedCoupon.message}
+              </Form.Text>
+            )}
+          </Form.Group>
+        </div>
+      )}
+
+      <div className={styles.enrollBenefits}>
+        <h6>What you'll get:</h6>
+        <ul>
+          <li>Lifetime access to course content</li>
+          <li>Certificate of completion</li>
+          <li>Q&A support</li>
+          <li>Downloadable resources</li>
+          <li>Mobile and TV access</li>
+        </ul>
+      </div>
+    </div>
+  )}
+</Modal.Body>
           <Modal.Footer>
             <Button
               variant="secondary"
@@ -649,22 +692,22 @@ const Courses = () => {
               Cancel
             </Button>
             <Button
-              variant="primary"
-              onClick={handleEnrollConfirm}
-              disabled={enrolling || !selectedCourse} // Added safety check
-              className={styles.confirmEnrollBtn}
-            >
-              {enrolling ? (
-                <>
-                  <Spinner animation="border" size="sm" className="me-2" />
-                  Processing...
-                </>
-              ) : selectedCourse && isCourseFree(selectedCourse) ? (
-                "Enroll for Free"
-              ) : (
-                `Pay ₹${calculateFinalPrice()}`
-              )}
-            </Button>
+  variant="primary"
+  onClick={handleEnrollConfirm}
+  disabled={enrolling || !selectedCourse}
+  className={styles.confirmEnrollBtn}
+>
+  {enrolling ? (
+    <>
+      <Spinner animation="border" size="sm" className="me-2" />
+      Processing...
+    </>
+  ) : calculateFinalPrice() === 0 ? (
+    "Enroll for Free"
+  ) : (
+    `Pay ₹${calculateFinalPrice().toFixed(2)}`
+  )}
+</Button>
           </Modal.Footer>
         </Modal>
       </Container>

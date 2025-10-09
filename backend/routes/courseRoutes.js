@@ -1,23 +1,39 @@
-
 const express = require('express');
-const { getCourses, getCourse, createCourse, updateCourse, deleteCourse } = require('../controllers/courseController');
+const { 
+  getCourses, 
+  getCourse, 
+  createCourse, 
+  updateCourse, 
+  deleteCourse, 
+  purchaseCourse 
+} = require('../controllers/courseController');
+
 const { auth, adminAuth } = require('../middleware/auth');
-const CourseContent = require('../models/CourseContent'); // ADD THIS IMPORT
+const CourseContent = require('../models/CourseContent');
 
 const router = express.Router();
 
+// ==========================
 // Public routes
+// ==========================
 router.get('/', getCourses);
 router.get('/:id', getCourse);
 
-// Get course content (authenticated users)
+// ==========================
+// Purchase course with coupon
+// ==========================
+router.post('/purchase', auth, purchaseCourse);
+
+// ==========================
+// Get course content (for enrolled users)
+// ==========================
 router.get('/:id/content', auth, async (req, res) => {
   try {
     const content = await CourseContent.find({ 
       course: req.params.id,
       status: 'active'
     }).sort({ order: 1 });
-    
+
     res.json({
       success: true,
       content
@@ -31,7 +47,9 @@ router.get('/:id/content', auth, async (req, res) => {
   }
 });
 
-// Protected admin routes
+// ==========================
+// Admin routes
+// ==========================
 router.post('/', auth, adminAuth, createCourse);
 router.put('/:id', auth, adminAuth, updateCourse);
 router.delete('/:id', auth, adminAuth, deleteCourse);
