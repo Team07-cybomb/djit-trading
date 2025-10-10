@@ -151,16 +151,22 @@ const Learning = () => {
   };
 
   const getVideoUrl = (content) => {
-    if (content.videoUrl) return content.videoUrl;
-    if (content.videoFile?.url) return content.videoFile.url;
-    return null;
-  };
+  if (content.videoUrl) return content.videoUrl;
+  if (content.videoFile?.url) {
+    // Prepend backend URL for uploaded files
+    return `http://localhost:5000${content.videoFile.url}`;
+  }
+  return null;
+};
 
-  const getDocumentUrl = (content) => {
-    if (content.documentUrl) return content.documentUrl;
-    if (content.documentFile?.url) return content.documentFile.url;
-    return null;
-  };
+const getDocumentUrl = (content) => {
+  if (content.documentUrl) return content.documentUrl;
+  if (content.documentFile?.url) {
+    // Prepend backend URL for uploaded files
+    return `http://localhost:5000${content.documentFile.url}`;
+  }
+  return null;
+};
 
   const formatEnrollmentDate = (date) => {
     return new Date(date).toLocaleDateString('en-US', {
