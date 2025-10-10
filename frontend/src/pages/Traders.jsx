@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Container, Row, Col, Card, Badge, Table, Form, Button } from 'react-bootstrap'
+import { Container, Row, Col, Card, Badge, Table, Form, Button, Spinner, Alert } from 'react-bootstrap'
 import { useAuth } from '../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
@@ -11,6 +11,8 @@ const Traders = () => {
   const [profile, setProfile] = useState(null)
   const [enrollments, setEnrollments] = useState([])
   const [isEditing, setIsEditing] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [formData, setFormData] = useState({
     phone: '',
     birthday: '',
@@ -26,47 +28,79 @@ const Traders = () => {
     tradingSegment: ''
   })
 
+  // Get user ID from auth context
+  const getUserId = () => {
+    if (!user) return null
+    return user.id || user._id || user.userId || user.userID
+  }
+
   useEffect(() => {
-    if (isAuthenticated && user) {
-      fetchUserProfile()
-      fetchEnrollments()
-    }
-  }, [isAuthenticated, user])
-
-  const fetchUserProfile = async () => {
-    try {
-      const response = await axios.get(`/api/users/${user.id}`)
-      setProfile(response.data.user)
-      if (response.data.user.profile) {
-        setFormData({
-          phone: response.data.user.profile.phone || '',
-          birthday: response.data.user.profile.birthday ? 
-            new Date(response.data.user.profile.birthday).toISOString().split('T')[0] : '',
-          address: response.data.user.profile.address || {
-            street: '', city: '', state: '', zipCode: '', country: ''
-          },
-          tradingViewId: response.data.user.profile.tradingViewId || '',
-          vishcardId: response.data.user.profile.vishcardId || '',
-          tradingSegment: response.data.user.profile.tradingSegment || ''
-        })
+    const fetchData = async () => {
+      if (!isAuthenticated) {
+        setLoading(false)
+        return
       }
-    } catch (error) {
-      console.error('Error fetching profile:', error)
-    }
-  }
 
-  const fetchEnrollments = async () => {
-    try {
-      const response = await axios.get(`/api/enrollments/user/${user.id}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`
+      try {
+        setLoading(true)
+        setError('')
+        const token = localStorage.getItem('token')
+        
+        if (!token) {
+          throw new Error('No authentication token found')
         }
-      })
-      setEnrollments(response.data.enrollments || [])
-    } catch (error) {
-      console.error('Error fetching enrollments:', error)
+
+        const config = {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+
+        // Try to get current user data without needing ID
+        const [profileResponse, enrollmentsResponse] = await Promise.all([
+          axios.get('/api/users/me', config).catch(() => 
+            // Fallback: try with user ID if /me endpoint doesn't exist
+            axios.get(`/api/users/${getUserId()}`, config)
+          ),
+          axios.get('/api/enrollments/my-courses', config).catch(() =>
+            // Fallback: try with user ID if /my-courses endpoint doesn't exist
+            axios.get(`/api/enrollments/user/${getUserId()}`, config)
+          )
+        ])
+
+        setProfile(profileResponse.data.user || profileResponse.data)
+        
+        // Set form data if profile exists
+        const userProfile = profileResponse.data.user || profileResponse.data
+        if (userProfile.profile) {
+          setFormData({
+            phone: userProfile.profile.phone || '',
+            birthday: userProfile.profile.birthday ? 
+              new Date(userProfile.profile.birthday).toISOString().split('T')[0] : '',
+            address: userProfile.profile.address || {
+              street: '', city: '', state: '', zipCode: '', country: ''
+            },
+            tradingViewId: userProfile.profile.tradingViewId || '',
+            vishcardId: userProfile.profile.vishcardId || '',
+            tradingSegment: userProfile.profile.tradingSegment || ''
+          })
+        }
+
+        // Process enrollments data
+        const enrollmentsData = enrollmentsResponse.data.enrollments || enrollmentsResponse.data || []
+        setEnrollments(enrollmentsData)
+
+      } catch (error) {
+        console.error('Error fetching user data:', error)
+        const errorMessage = error.response?.data?.message || 
+          error.message || 
+          'Failed to load user data. Please try again.'
+        setError(errorMessage)
+      } finally {
+        setLoading(false)
+      }
     }
-  }
+
+    fetchData()
+  }, [isAuthenticated, user])
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -90,19 +124,48 @@ const Traders = () => {
   const handleSubmit = async (e) => {
     e.preventDefault()
     try {
+      const token = localStorage.getItem('token')
       await axios.put('/api/users/profile', formData, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`
-        }
+        headers: { Authorization: `Bearer ${token}` }
       })
-      await fetchUserProfile()
+      
+      // Refetch data to update UI
+      setLoading(true)
+      const config = { headers: { Authorization: `Bearer ${token}` } }
+      const [profileResponse, enrollmentsResponse] = await Promise.all([
+        axios.get('/api/users/me', config).catch(() => 
+          axios.get(`/api/users/${getUserId()}`, config)
+        ),
+        axios.get('/api/enrollments/my-courses', config).catch(() =>
+          axios.get(`/api/enrollments/user/${getUserId()}`, config)
+        )
+      ])
+
+      setProfile(profileResponse.data.user || profileResponse.data)
+      setEnrollments(enrollmentsResponse.data.enrollments || enrollmentsResponse.data || [])
+      
       setIsEditing(false)
     } catch (error) {
       console.error('Error updating profile:', error)
+      alert('Failed to update profile. Please try again.')
+    } finally {
+      setLoading(false)
     }
   }
 
   const handleContinueLearning = (courseId) => {
+    if (!courseId) {
+      alert('Course not found. Please try again.')
+      return
+    }
+    navigate(`/learning/${courseId}`)
+  }
+
+  const handleStartLearning = (courseId) => {
+    if (!courseId) {
+      alert('Course not found. Please try again.')
+      return
+    }
     navigate(`/learning/${courseId}`)
   }
 
@@ -133,86 +196,149 @@ const Traders = () => {
     return `In Progress (${progress}%)`
   }
 
-  if (!isAuthenticated) {
+  const getCourseAction = (enrollment) => {
+    if (enrollment.progress === 100) {
+      return {
+        variant: "outline-success",
+        text: 'Review',
+        handler: () => handleContinueLearning(enrollment.course?._id || enrollment.course)
+      }
+    } else if (enrollment.progress > 0) {
+      return {
+        variant: "primary",
+        text: 'Continue',
+        handler: () => handleContinueLearning(enrollment.course?._id || enrollment.course)
+      }
+    } else {
+      return {
+        variant: "primary",
+        text: 'Start Learning',
+        handler: () => handleStartLearning(enrollment.course?._id || enrollment.course)
+      }
+    }
+  }
+
+  if (loading) {
     return (
       <Container className={styles.tradersPage}>
-        <div className={styles.notAuthenticated}>
-          <h2>Please log in to view your trader profile</h2>
-          <p>You need to be logged in to access this page.</p>
+        <div className="text-center py-5">
+          <Spinner animation="border" role="status" variant="primary">
+            <span className="visually-hidden">Loading...</span>
+          </Spinner>
+          <p className="mt-3">Loading your profile...</p>
         </div>
       </Container>
     )
   }
 
+  if (!isAuthenticated) {
+    return (
+      <Container className={styles.tradersPage}>
+        <div className="text-center py-5">
+          <h2>Please log in to view your trader profile</h2>
+          <p className="mb-4">You need to be logged in to access this page.</p>
+          <Button variant="primary" onClick={() => navigate('/login')}>
+            Log In
+          </Button>
+        </div>
+      </Container>
+    )
+  }
+
+  if (error) {
+    return (
+      <Container className={styles.tradersPage}>
+        <Alert variant="danger" className="mt-4">
+          <Alert.Heading>Error Loading Profile</Alert.Heading>
+          <p>{error}</p>
+          <div className="d-flex gap-2">
+            <Button variant="primary" onClick={() => window.location.reload()}>
+              Try Again
+            </Button>
+            <Button variant="outline-secondary" onClick={() => navigate('/courses')}>
+              Browse Courses
+            </Button>
+          </div>
+        </Alert>
+      </Container>
+    )
+  }
+
+  const inProgressEnrollments = enrollments.filter(
+    enrollment => enrollment.progress > 0 && enrollment.progress < 100
+  )
+
+  const completedEnrollments = enrollments.filter(
+    enrollment => enrollment.progress === 100 || enrollment.completed
+  )
+
   return (
     <div className={styles.tradersPage}>
-      <Container>
+      <Container className="py-4">
         <Row>
           <Col lg={4} className="mb-4">
             {/* Profile Card */}
-            <Card className={styles.profileCard}>
+            <Card className="shadow-sm">
               <Card.Body className="text-center">
-                <div className={styles.avatar}>
-                  {user?.username?.charAt(0).toUpperCase()}
+                <div className={`${styles.avatar} bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3`} 
+                     style={{width: '80px', height: '80px', fontSize: '2rem'}}>
+                  {user?.username?.charAt(0).toUpperCase() || 'U'}
                 </div>
-                <h4 className={styles.username}>{user?.username}</h4>
-                <p className={styles.email}>{user?.email}</p>
+                <h4 className="mb-1">{user?.username || 'User'}</h4>
+                <p className="text-muted mb-3">{user?.email || 'No email'}</p>
                 
                 {profile?.profile?.badge && (
                   <Badge 
                     bg={getBadgeVariant(profile.profile.badge)}
-                    className={styles.userBadge}
+                    className="mb-3 fs-6"
                   >
                     {profile.profile.badge} Trader
                   </Badge>
                 )}
 
-                <div className={styles.stats}>
-                  <div className={styles.stat}>
-                    <span className={styles.statNumber}>{enrollments.length}</span>
-                    <span className={styles.statLabel}>Courses</span>
+                <div className="d-flex justify-content-around mt-4">
+                  <div className="text-center">
+                    <div className="fw-bold fs-4 text-primary">{enrollments.length}</div>
+                    <div className="text-muted small">Courses</div>
                   </div>
-                  <div className={styles.stat}>
-                    <span className={styles.statNumber}>
-                      {enrollments.filter(e => e.completed).length}
-                    </span>
-                    <span className={styles.statLabel}>Completed</span>
+                  <div className="text-center">
+                    <div className="fw-bold fs-4 text-success">{completedEnrollments.length}</div>
+                    <div className="text-muted small">Completed</div>
                   </div>
-                  <div className={styles.stat}>
-                    <span className={styles.statNumber}>
-                      {Math.round(enrollments.reduce((acc, curr) => acc + (curr.progress || 0), 0) / 
-                       (enrollments.length || 1))}%
-                    </span>
-                    <span className={styles.statLabel}>Avg Progress</span>
+                  <div className="text-center">
+                    <div className="fw-bold fs-4 text-warning">
+                      {enrollments.length > 0 
+                        ? Math.round(enrollments.reduce((acc, curr) => acc + (curr.progress || 0), 0) / enrollments.length)
+                        : 0
+                      }%
+                    </div>
+                    <div className="text-muted small">Progress</div>
                   </div>
                 </div>
               </Card.Body>
             </Card>
 
             {/* Quick Actions */}
-            <Card className={styles.actionsCard}>
-              <Card.Header>
-                <h5 className={styles.cardTitle}>Quick Actions</h5>
+            <Card className="shadow-sm mt-4">
+              <Card.Header className="bg-light">
+                <h5 className="mb-0">Quick Actions</h5>
               </Card.Header>
               <Card.Body>
-                <div className={styles.actionButtons}>
+                <div className="d-grid gap-2">
                   <Button 
                     variant="outline-primary" 
-                    className={styles.actionBtn}
                     onClick={handleBrowseCourses}
                   >
                     Browse Courses
                   </Button>
                   <Button 
                     variant="outline-success" 
-                    className={styles.actionBtn}
                     onClick={() => navigate('/progress')}
                   >
                     My Progress
                   </Button>
                   <Button 
                     variant="outline-info" 
-                    className={styles.actionBtn}
                     onClick={() => navigate('/community')}
                   >
                     Community
@@ -222,46 +348,41 @@ const Traders = () => {
             </Card>
 
             {/* Continue Learning Section */}
-            {enrollments.filter(e => e.progress > 0 && e.progress < 100).length > 0 && (
-              <Card className={styles.continueCard}>
-                <Card.Header>
-                  <h5 className={styles.cardTitle}>Continue Learning</h5>
+            {inProgressEnrollments.length > 0 && (
+              <Card className="shadow-sm mt-4">
+                <Card.Header className="bg-light">
+                  <h5 className="mb-0">Continue Learning</h5>
                 </Card.Header>
                 <Card.Body>
-                  <div className={styles.continueList}>
-                    {enrollments
-                      .filter(enrollment => enrollment.progress > 0 && enrollment.progress < 100)
-                      .slice(0, 3) // Show max 3 courses
-                      .map(enrollment => (
-                        <div key={enrollment._id} className={styles.continueItem}>
-                          <div className={styles.courseInfo}>
-                            <h6 className={styles.courseTitle}>
-                              {enrollment.course?.title}
-                            </h6>
-                            <div className={styles.progressSection}>
-                              <div className={styles.progressBar}>
-                                <div 
-                                  className={styles.progressFill}
-                                  style={{ width: `${enrollment.progress}%` }}
-                                ></div>
-                              </div>
-                              <span className={styles.progressText}>
-                                {enrollment.progress}%
-                              </span>
+                  {inProgressEnrollments.slice(0, 3).map(enrollment => {
+                    const courseAction = getCourseAction(enrollment)
+                    return (
+                      <div key={enrollment._id} className="d-flex align-items-center mb-3 pb-3 border-bottom">
+                        <div className="flex-grow-1">
+                          <h6 className="mb-1" style={{fontSize: '0.9rem'}}>
+                            {enrollment.course?.title || 'Untitled Course'}
+                          </h6>
+                          <div className="d-flex align-items-center">
+                            <div className="progress flex-grow-1 me-2" style={{height: '6px'}}>
+                              <div 
+                                className="progress-bar"
+                                style={{ width: `${enrollment.progress || 0}%` }}
+                              ></div>
                             </div>
+                            <small className="text-muted">{enrollment.progress || 0}%</small>
                           </div>
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            className={styles.continueBtn}
-                            onClick={() => handleContinueLearning(enrollment.course?._id || enrollment.course)}
-                          >
-                            Continue
-                          </Button>
                         </div>
-                      ))
-                    }
-                  </div>
+                        <Button
+                          variant={courseAction.variant}
+                          size="sm"
+                          onClick={courseAction.handler}
+                          style={{minWidth: '80px'}}
+                        >
+                          {courseAction.text}
+                        </Button>
+                      </div>
+                    )
+                  })}
                 </Card.Body>
               </Card>
             )}
@@ -269,9 +390,9 @@ const Traders = () => {
 
           <Col lg={8}>
             {/* Profile Form */}
-            <Card className={styles.detailsCard}>
-              <Card.Header className="d-flex justify-content-between align-items-center">
-                <h5 className={styles.cardTitle}>Trader Profile</h5>
+            <Card className="shadow-sm mb-4">
+              <Card.Header className="bg-light d-flex justify-content-between align-items-center">
+                <h5 className="mb-0">Trader Profile</h5>
                 <Button 
                   variant={isEditing ? "outline-secondary" : "outline-primary"}
                   size="sm"
@@ -364,7 +485,7 @@ const Traders = () => {
                       </div>
                     </Form.Group>
 
-                    <h6>Address</h6>
+                    <h6 className="border-bottom pb-2">Address</h6>
                     <Row>
                       <Col md={12}>
                         <Form.Group className="mb-3">
@@ -446,71 +567,77 @@ const Traders = () => {
                     </div>
                   </Form>
                 ) : (
-                  <div className={styles.profileDetails}>
+                  <div>
                     <Row>
                       <Col sm={6}>
-                        <div className={styles.detailItem}>
+                        <div className="mb-3">
                           <strong>Phone:</strong>
-                          <span>{profile?.profile?.phone || 'Not provided'}</span>
+                          <div>{profile?.profile?.phone || 'Not provided'}</div>
                         </div>
-                        <div className={styles.detailItem}>
+                        <div className="mb-3">
                           <strong>Birthday:</strong>
-                          <span>
+                          <div>
                             {profile?.profile?.birthday ? 
                               new Date(profile.profile.birthday).toLocaleDateString() : 
                               'Not provided'
                             }
-                          </span>
+                          </div>
                         </div>
-                        <div className={styles.detailItem}>
+                        <div className="mb-3">
                           <strong>TradingView ID:</strong>
-                          <span>{profile?.profile?.tradingViewId || 'Not provided'}</span>
+                          <div>{profile?.profile?.tradingViewId || 'Not provided'}</div>
                         </div>
                       </Col>
                       <Col sm={6}>
-                        <div className={styles.detailItem}>
+                        <div className="mb-3">
                           <strong>Vishcard ID:</strong>
-                          <span>{profile?.profile?.vishcardId || 'Not provided'}</span>
+                          <div>{profile?.profile?.vishcardId || 'Not provided'}</div>
                         </div>
-                        <div className={styles.detailItem}>
+                        <div className="mb-3">
                           <strong>Trading Segment:</strong>
-                          <span>{profile?.profile?.tradingSegment || 'Not selected'}</span>
+                          <div>{profile?.profile?.tradingSegment || 'Not selected'}</div>
                         </div>
-                        <div className={styles.detailItem}>
+                        <div className="mb-3">
                           <strong>Member Since:</strong>
-                          <span>
+                          <div>
                             {user?.createdAt ? 
                               new Date(user.createdAt).toLocaleDateString() : 
                               'N/A'
                             }
-                          </span>
+                          </div>
                         </div>
                       </Col>
                     </Row>
                     
                     {profile?.profile?.address && (
-                      <div className={styles.addressSection}>
+                      <div className="mt-4">
                         <h6>Address</h6>
-                        <div className={styles.detailItem}>
-                          <strong>Street:</strong>
-                          <span>{profile.profile.address.street || 'Not provided'}</span>
-                        </div>
-                        <div className={styles.detailItem}>
-                          <strong>City:</strong>
-                          <span>{profile.profile.address.city || 'Not provided'}</span>
-                        </div>
-                        <div className={styles.detailItem}>
-                          <strong>State:</strong>
-                          <span>{profile.profile.address.state || 'Not provided'}</span>
-                        </div>
-                        <div className={styles.detailItem}>
-                          <strong>ZIP Code:</strong>
-                          <span>{profile.profile.address.zipCode || 'Not provided'}</span>
-                        </div>
-                        <div className={styles.detailItem}>
-                          <strong>Country:</strong>
-                          <span>{profile.profile.address.country || 'Not provided'}</span>
-                        </div>
+                        <Row>
+                          <Col sm={6}>
+                            <div className="mb-2">
+                              <strong>Street:</strong>
+                              <div>{profile.profile.address.street || 'Not provided'}</div>
+                            </div>
+                            <div className="mb-2">
+                              <strong>City:</strong>
+                              <div>{profile.profile.address.city || 'Not provided'}</div>
+                            </div>
+                            <div className="mb-2">
+                              <strong>State:</strong>
+                              <div>{profile.profile.address.state || 'Not provided'}</div>
+                            </div>
+                          </Col>
+                          <Col sm={6}>
+                            <div className="mb-2">
+                              <strong>ZIP Code:</strong>
+                              <div>{profile.profile.address.zipCode || 'Not provided'}</div>
+                            </div>
+                            <div className="mb-2">
+                              <strong>Country:</strong>
+                              <div>{profile.profile.address.country || 'Not provided'}</div>
+                            </div>
+                          </Col>
+                        </Row>
                       </div>
                     )}
                   </div>
@@ -519,9 +646,9 @@ const Traders = () => {
             </Card>
 
             {/* Enrollments Table */}
-            <Card className={styles.enrollmentsCard}>
-              <Card.Header>
-                <h5 className={styles.cardTitle}>My Courses</h5>
+            <Card className="shadow-sm">
+              <Card.Header className="bg-light">
+                <h5 className="mb-0">My Courses</h5>
               </Card.Header>
               <Card.Body>
                 {enrollments.length > 0 ? (
@@ -535,49 +662,51 @@ const Traders = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {enrollments.map(enrollment => (
-                        <tr key={enrollment._id}>
-                          <td>
-                            <strong>{enrollment.course?.title}</strong>
-                            <div className={styles.courseMeta}>
-                              <small className="text-muted">
-                                Enrolled: {new Date(enrollment.enrollmentDate).toLocaleDateString()}
-                              </small>
-                            </div>
-                          </td>
-                          <td>
-                            <div className={styles.progressBar}>
-                              <div 
-                                className={styles.progressFill}
-                                style={{ width: `${enrollment.progress || 0}%` }}
-                              ></div>
-                              <span className={styles.progressText}>
-                                {enrollment.progress || 0}%
-                              </span>
-                            </div>
-                          </td>
-                          <td>
-                            <Badge bg={getProgressVariant(enrollment.progress || 0)}>
-                              {getProgressText(enrollment.progress || 0)}
-                            </Badge>
-                          </td>
-                          <td>
-                            <Button
-                              variant={enrollment.progress === 100 ? "outline-success" : "primary"}
-                              size="sm"
-                              onClick={() => handleContinueLearning(enrollment.course?._id || enrollment.course)}
-                            >
-                              {enrollment.progress === 100 ? 'Review' : 
-                               enrollment.progress > 0 ? 'Continue' : 'Start'}
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
+                      {enrollments.map(enrollment => {
+                        const courseAction = getCourseAction(enrollment)
+                        return (
+                          <tr key={enrollment._id}>
+                            <td>
+                              <strong>{enrollment.course?.title || 'Untitled Course'}</strong>
+                              <div>
+                                <small className="text-muted">
+                                  Enrolled: {new Date(enrollment.enrollmentDate).toLocaleDateString()}
+                                </small>
+                              </div>
+                            </td>
+                            <td style={{width: '200px'}}>
+                              <div className="d-flex align-items-center">
+                                <div className="progress flex-grow-1 me-2" style={{height: '8px'}}>
+                                  <div 
+                                    className={`progress-bar bg-${getProgressVariant(enrollment.progress || 0)}`}
+                                    style={{ width: `${enrollment.progress || 0}%` }}
+                                  ></div>
+                                </div>
+                                <small>{enrollment.progress || 0}%</small>
+                              </div>
+                            </td>
+                            <td>
+                              <Badge bg={getProgressVariant(enrollment.progress || 0)}>
+                                {getProgressText(enrollment.progress || 0)}
+                              </Badge>
+                            </td>
+                            <td>
+                              <Button
+                                variant={courseAction.variant}
+                                size="sm"
+                                onClick={courseAction.handler}
+                              >
+                                {courseAction.text}
+                              </Button>
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </Table>
                 ) : (
-                  <div className={styles.noEnrollments}>
-                    <p>You haven't enrolled in any courses yet.</p>
+                  <div className="text-center py-4">
+                    <p className="text-muted mb-3">You haven't enrolled in any courses yet.</p>
                     <Button variant="primary" onClick={handleBrowseCourses}>
                       Browse Courses
                     </Button>
