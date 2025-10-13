@@ -75,15 +75,30 @@ function CouponGenerator() {
     return type === "percentage" ? "success" : "primary";
   };
 
-  const isCouponActive = (coupon) => {
+  const getCouponStatus = (coupon) => {
     const now = new Date();
-    return new Date(coupon.validFrom) <= now && new Date(coupon.validUntil) >= now;
+    const validFrom = new Date(coupon.validFrom);
+    const validUntil = new Date(coupon.validUntil);
+
+    if (now > validUntil) {
+      return { label: "Expired", variant: "danger" };
+    }
+
+    if (coupon.usageLimit && coupon.usedCount >= coupon.usageLimit) {
+      return { label: "Used", variant: "warning" };
+    }
+
+    if (validFrom <= now && validUntil >= now) {
+      return { label: "Active", variant: "success" };
+    }
+
+    return { label: "Inactive", variant: "secondary" };
   };
 
   const containerStyle = {
     background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
     minHeight: "100vh",
-    padding: "20px 0"
+    padding: "20px 0",
   };
 
   const headerStyle = {
@@ -93,7 +108,7 @@ function CouponGenerator() {
     padding: "25px",
     marginBottom: "30px",
     boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1)",
-    border: "1px solid rgba(255, 255, 255, 0.2)"
+    border: "1px solid rgba(255, 255, 255, 0.2)",
   };
 
   const tableStyle = {
@@ -101,7 +116,7 @@ function CouponGenerator() {
     borderRadius: "15px",
     overflow: "hidden",
     boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1)",
-    border: "1px solid rgba(255, 255, 255, 0.2)"
+    border: "1px solid rgba(255, 255, 255, 0.2)",
   };
 
   const buttonStyle = {
@@ -111,18 +126,18 @@ function CouponGenerator() {
     padding: "10px 25px",
     fontWeight: "600",
     boxShadow: "0 4px 15px rgba(102, 126, 234, 0.3)",
-    transition: "all 0.3s ease"
+    transition: "all 0.3s ease",
   };
 
   const modalStyle = {
-    backdropFilter: "blur(5px)"
+    backdropFilter: "blur(5px)",
   };
 
   const formControlStyle = {
     borderRadius: "10px",
     border: "1px solid #e0e0e0",
     padding: "12px 15px",
-    transition: "all 0.3s ease"
+    transition: "all 0.3s ease",
   };
 
   return (
@@ -132,28 +147,32 @@ function CouponGenerator() {
           <Card.Body>
             <div className="d-flex justify-content-between align-items-center mb-3">
               <div>
-                <h2 style={{ 
-                  color: "#2c3e50", 
-                  fontWeight: "700",
-                  marginBottom: "5px"
-                }}>
+                <h2
+                  style={{
+                    color: "#2c3e50",
+                    fontWeight: "700",
+                    marginBottom: "5px",
+                  }}
+                >
                   Coupon Generator
                 </h2>
                 <p style={{ color: "#7f8c8d", margin: 0 }}>
                   Create and manage discount coupons for your customers
                 </p>
               </div>
-              <Button 
-                variant="primary" 
+              <Button
+                variant="primary"
                 onClick={() => setShow(true)}
                 style={buttonStyle}
                 onMouseEnter={(e) => {
                   e.target.style.transform = "translateY(-2px)";
-                  e.target.style.boxShadow = "0 6px 20px rgba(102, 126, 234, 0.4)";
+                  e.target.style.boxShadow =
+                    "0 6px 20px rgba(102, 126, 234, 0.4)";
                 }}
                 onMouseLeave={(e) => {
                   e.target.style.transform = "translateY(0)";
-                  e.target.style.boxShadow = "0 4px 15px rgba(102, 126, 234, 0.3)";
+                  e.target.style.boxShadow =
+                    "0 4px 15px rgba(102, 126, 234, 0.3)";
                 }}
               >
                 + Generate Coupon
@@ -174,10 +193,12 @@ function CouponGenerator() {
               </div>
             ) : (
               <Table hover responsive className="mb-0">
-                <thead style={{ 
-                  background: "linear-gradient(45deg, #667eea, #764ba2)",
-                  color: "white"
-                }}>
+                <thead
+                  style={{
+                    background: "linear-gradient(45deg, #667eea, #764ba2)",
+                    color: "white",
+                  }}
+                >
                   <tr>
                     <th>Code</th>
                     <th>Type</th>
@@ -193,62 +214,90 @@ function CouponGenerator() {
                 </thead>
                 <tbody>
                   {coupons.length > 0 ? (
-                    coupons.map((c) => (
-                      <tr key={c._id} style={{ 
-                        background: isCouponActive(c) ? "rgba(102, 126, 234, 0.05)" : "rgba(255, 255, 255, 0.5)",
-                        borderLeft: isCouponActive(c) ? "4px solid #28a745" : "4px solid #dc3545"
-                      }}>
-                        <td>
-                          <strong style={{ 
-                            color: "#2c3e50",
-                            fontFamily: "monospace",
-                            fontSize: "14px"
-                          }}>
-                            {c.code}
-                          </strong>
-                        </td>
-                        <td>
-                          <Badge bg={getDiscountBadgeVariant(c.discountType)}>
-                            {c.discountType}
-                          </Badge>
-                        </td>
-                        <td>
-                          <span style={{ 
-                            fontWeight: "600",
-                            color: c.discountType === "percentage" ? "#28a745" : "#007bff"
-                          }}>
-                            {c.discountValue}{c.discountType === "percentage" ? "%" : "$"}
-                          </span>
-                        </td>
-                        <td>{c.minPurchase ? `$${c.minPurchase}` : "-"}</td>
-                        <td>{c.maxDiscount ? `$${c.maxDiscount}` : "-"}</td>
-                        <td>{new Date(c.validFrom).toLocaleDateString()}</td>
-                        <td>{new Date(c.validUntil).toLocaleDateString()}</td>
-                        <td>{c.usageLimit || "Unlimited"}</td>
-                        <td>
-                          <span style={{ 
-                            fontWeight: "600",
-                            color: c.usedCount > 0 ? "#28a745" : "#6c757d"
-                          }}>
-                            {c.usedCount}
-                          </span>
-                        </td>
-                        <td>
-                          <Badge bg={isCouponActive(c) ? "success" : "danger"}>
-                            {isCouponActive(c) ? "Active" : "Expired"}
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))
+                    coupons.map((c) => {
+                      const status = getCouponStatus(c);
+                      return (
+                        <tr
+                          key={c._id}
+                          style={{
+                            background:
+                              status.label === "Active"
+                                ? "rgba(102, 126, 234, 0.05)"
+                                : "rgba(255, 255, 255, 0.5)",
+                            borderLeft:
+                              status.label === "Active"
+                                ? "4px solid #28a745"
+                                : status.label === "Deactivated"
+                                ? "4px solid #ffc107"
+                                : "4px solid #dc3545",
+                          }}
+                        >
+                          <td>
+                            <strong
+                              style={{
+                                color: "#2c3e50",
+                                fontFamily: "monospace",
+                                fontSize: "14px",
+                              }}
+                            >
+                              {c.code}
+                            </strong>
+                          </td>
+                          <td>
+                            <Badge bg={getDiscountBadgeVariant(c.discountType)}>
+                              {c.discountType}
+                            </Badge>
+                          </td>
+                          <td>
+                            <span
+                              style={{
+                                fontWeight: "600",
+                                color:
+                                  c.discountType === "percentage"
+                                    ? "#28a745"
+                                    : "#007bff",
+                              }}
+                            >
+                              {c.discountValue}
+                              {c.discountType === "percentage" ? "%" : "$"}
+                            </span>
+                          </td>
+                          <td>{c.minPurchase ? `$${c.minPurchase}` : "-"}</td>
+                          <td>{c.maxDiscount ? `$${c.maxDiscount}` : "-"}</td>
+                          <td>{new Date(c.validFrom).toLocaleDateString()}</td>
+                          <td>{new Date(c.validUntil).toLocaleDateString()}</td>
+                          <td>{c.usageLimit || "Unlimited"}</td>
+                          <td>
+                            <span
+                              style={{
+                                fontWeight: "600",
+                                color:
+                                  c.usedCount > 0 ? "#28a745" : "#6c757d",
+                              }}
+                            >
+                              {c.usedCount}
+                            </span>
+                          </td>
+                          <td>
+                            <Badge bg={status.variant}>{status.label}</Badge>
+                          </td>
+                        </tr>
+                      );
+                    })
                   ) : (
                     <tr>
                       <td colSpan="10" className="text-center py-4">
-                        <div style={{ 
-                          color: "#7f8c8d",
-                          fontSize: "18px",
-                          padding: "40px"
-                        }}>
-                          <i className="fas fa-ticket-alt mb-3" style={{ fontSize: "48px", opacity: 0.5 }}></i>
+                        <div
+                          style={{
+                            color: "#7f8c8d",
+                            fontSize: "18px",
+                            padding: "40px",
+                          }}
+                        >
+                          <i
+                            className="fas fa-ticket-alt mb-3"
+                            style={{ fontSize: "48px", opacity: 0.5 }}
+                          ></i>
                           <br />
                           No coupons found. Create your first coupon!
                         </div>
@@ -261,19 +310,14 @@ function CouponGenerator() {
           </Card.Body>
         </Card>
 
-        {/* Popup Modal */}
-        <Modal 
-          show={show} 
-          onHide={() => setShow(false)} 
-          centered
-          style={modalStyle}
-        >
-          <Modal.Header 
+        {/* Modal for Coupon Creation */}
+        <Modal show={show} onHide={() => setShow(false)} centered style={modalStyle}>
+          <Modal.Header
             closeButton
             style={{
               background: "linear-gradient(45deg, #667eea, #764ba2)",
               color: "white",
-              border: "none"
+              border: "none",
             }}
           >
             <Modal.Title>
@@ -329,7 +373,11 @@ function CouponGenerator() {
                       value={formData.discountValue}
                       onChange={handleChange}
                       required
-                      placeholder={formData.discountType === "percentage" ? "e.g., 25" : "e.g., 50"}
+                      placeholder={
+                        formData.discountType === "percentage"
+                          ? "e.g., 25"
+                          : "e.g., 50"
+                      }
                       style={formControlStyle}
                     />
                   </Form.Group>
@@ -422,30 +470,33 @@ function CouponGenerator() {
               </Form.Group>
 
               <div className="text-end">
-                <Button 
-                  variant="outline-secondary" 
-                  onClick={() => setShow(false)} 
+                <Button
+                  variant="outline-secondary"
+                  onClick={() => setShow(false)}
                   className="me-2"
                   style={{
                     borderRadius: "25px",
                     padding: "10px 25px",
-                    border: "2px solid #6c757d"
+                    border: "2px solid #6c757d",
                   }}
                 >
                   Cancel
                 </Button>
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   variant="primary"
                   disabled={loading}
                   style={{
                     ...buttonStyle,
-                    opacity: loading ? 0.7 : 1
+                    opacity: loading ? 0.7 : 1,
                   }}
                 >
                   {loading ? (
                     <>
-                      <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                      <span
+                        className="spinner-border spinner-border-sm me-2"
+                        role="status"
+                      ></span>
                       Generating...
                     </>
                   ) : (

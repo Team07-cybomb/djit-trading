@@ -74,3 +74,96 @@ exports.validateCoupon = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+exports.applyCoupon = async (req, res) => {
+  try {
+    const { code, totalAmount } = req.body;
+
+    if (!code || !totalAmount) {
+      return res.status(400).json({
+        success: false,
+        message: 'Coupon code and total amount are required',
+      });
+    }
+
+    // Find the coupon
+    const coupon = await Coupon.findOne({ code: code.toUpperCase() });
+
+    if (!coupon) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invalid coupon code',
+      });
+    }
+
+    // Validate coupon status
+    if (!coupon.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: 'This coupon is no longer active',
+      });
+    }
+
+    const now = new Date();
+    if (now < coupon.validFrom || now > coupon.validUntil) {
+      return res.status(400).json({
+        success: false,
+        message: 'Coupon is expired or not yet valid',
+      });
+    }
+
+    if (coupon.usageLimit && coupon.usedCount >= coupon.usageLimit) {
+      return res.status(400).json({
+        success: false,
+        message: 'Coupon usage limit reached',
+      });
+    }
+
+    if (coupon.minPurchase && totalAmount < coupon.minPurchase) {
+      return res.status(400).json({
+        success: false,
+        message: `Minimum purchase of ₹${coupon.minPurchase} required to use this coupon`,
+      });
+    }
+
+    // ✅ Calculate discount
+    let discountAmount = 0;
+    if (coupon.discountType === 'percentage') {
+      discountAmount = (totalAmount * coupon.discountValue) / 100;
+      if (coupon.maxDiscount && discountAmount > coupon.maxDiscount) {
+        discountAmount = coupon.maxDiscount;
+      }
+    } else if (coupon.discountType === 'fixed') {
+      discountAmount = coupon.discountValue;
+    }
+
+    const finalAmount = totalAmount - discountAmount;
+
+    // ✅ Atomic update: increment usedCount
+    const updatedCoupon = await Coupon.findOneAndUpdate(
+      { _id: coupon._id },
+      {
+        $inc: { usedCount: 1 },
+        $set: {
+          ...(coupon.usageLimit &&
+            coupon.usedCount + 1 >= coupon.usageLimit && { isActive: false }),
+        },
+      },
+      { new: true }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Coupon applied successfully',
+      discountAmount,
+      finalAmount,
+      coupon: updatedCoupon,
+    });
+  } catch (error) {
+    console.error('Error applying coupon:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Something went wrong while applying the coupon',
+      error: error.message,
+    });
+  }
+};
