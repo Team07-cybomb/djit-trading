@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Table, Button, Badge, Form, InputGroup, Modal, Alert } from 'react-bootstrap'
+import { Card, Table, Button, Badge, Form, InputGroup, Modal, Alert, Image } from 'react-bootstrap'
 import axios from 'axios'
 import * as XLSX from 'xlsx'
 
@@ -129,6 +129,22 @@ const UserManagement = () => {
     }
   }
 
+  // Get profile picture URL or return null
+  const getProfilePicture = (user) => {
+    if (user?.profile?.profilePicture?.url) {
+      return user.profile.profilePicture.url
+    }
+    return null
+  }
+
+  // Get initials for avatar fallback
+  const getInitials = (user) => {
+    if (user?.profile?.firstName && user?.profile?.lastName) {
+      return `${user.profile.firstName.charAt(0)}${user.profile.lastName.charAt(0)}`.toUpperCase()
+    }
+    return user?.username?.charAt(0).toUpperCase() || 'U'
+  }
+
   const exportToExcel = () => {
     try {
       // Prepare data for export
@@ -145,6 +161,7 @@ const UserManagement = () => {
         'Discord ID': user.profile?.discordId || '',
         'Trading Segment': user.profile?.tradingSegment || '',
         'Badge': user.profile?.badge || '',
+        'Profile Picture': getProfilePicture(user) || 'No picture',
         'Role': user.role,
         'Status': user.isActive !== false ? 'Active' : 'Inactive',
         'Verified': user.isVerified ? 'Yes' : 'No',
@@ -174,6 +191,7 @@ const UserManagement = () => {
         { wch: 15 }, // Discord ID
         { wch: 15 }, // Trading Segment
         { wch: 12 }, // Badge
+        { wch: 20 }, // Profile Picture
         { wch: 10 }, // Role
         { wch: 10 }, // Status
         { wch: 10 }, // Verified
@@ -320,6 +338,7 @@ const UserManagement = () => {
                 <Table hover striped>
                   <thead className="table-dark">
                     <tr>
+                      <th>Profile</th>
                       <th>User Info</th>
                       <th>Contact</th>
                       <th>Trading Details</th>
@@ -332,6 +351,26 @@ const UserManagement = () => {
                   <tbody>
                     {users.map((user) => (
                       <tr key={user._id}>
+                        <td>
+                          <div className="d-flex align-items-center">
+                            {getProfilePicture(user) ? (
+                              <Image
+                                src={getProfilePicture(user)}
+                                roundedCircle
+                                style={{width: '45px', height: '45px', objectFit: 'cover'}}
+                                alt={`${user.username}'s profile`}
+                                className="me-2"
+                              />
+                            ) : (
+                              <div 
+                                className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-2"
+                                style={{width: '45px', height: '45px', fontSize: '0.9rem'}}
+                              >
+                                {getInitials(user)}
+                              </div>
+                            )}
+                          </div>
+                        </td>
                         <td>
                           <div>
                             <strong>{user.username}</strong>
@@ -498,9 +537,28 @@ const UserManagement = () => {
         <Modal.Body>
           {selectedUser && (
             <div>
-              <p>
-                Change role for <strong>{selectedUser.username}</strong> ({selectedUser.email})
-              </p>
+              <div className="d-flex align-items-center mb-3">
+                {getProfilePicture(selectedUser) ? (
+                  <Image
+                    src={getProfilePicture(selectedUser)}
+                    roundedCircle
+                    style={{width: '50px', height: '50px', objectFit: 'cover'}}
+                    alt={`${selectedUser.username}'s profile`}
+                    className="me-3"
+                  />
+                ) : (
+                  <div 
+                    className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3"
+                    style={{width: '50px', height: '50px', fontSize: '1rem'}}
+                  >
+                    {getInitials(selectedUser)}
+                  </div>
+                )}
+                <div>
+                  <strong>{selectedUser.username}</strong>
+                  <div className="text-muted">{selectedUser.email}</div>
+                </div>
+              </div>
               <Form.Group className="mb-3">
                 <Form.Label>Select Role</Form.Label>
                 <Form.Select
@@ -543,6 +601,40 @@ const UserManagement = () => {
         <Modal.Body>
           {userDetails && (
             <div>
+              {/* Profile Header with Picture */}
+              <div className="d-flex align-items-center mb-4 p-3 bg-light rounded">
+                {getProfilePicture(userDetails) ? (
+                  <Image
+                    src={getProfilePicture(userDetails)}
+                    roundedCircle
+                    style={{width: '80px', height: '80px', objectFit: 'cover'}}
+                    alt={`${userDetails.username}'s profile`}
+                    className="me-4"
+                  />
+                ) : (
+                  <div 
+                    className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-4"
+                    style={{width: '80px', height: '80px', fontSize: '1.5rem'}}
+                  >
+                    {getInitials(userDetails)}
+                  </div>
+                )}
+                <div>
+                  <h4 className="mb-1">{userDetails.username}</h4>
+                  <p className="text-muted mb-1">{userDetails.email}</p>
+                  <div className="d-flex gap-2">
+                    <Badge bg={getRoleVariant(userDetails.role)}>
+                      {userDetails.role.toUpperCase()}
+                    </Badge>
+                    {userDetails.profile?.badge && (
+                      <Badge bg={getBadgeVariant(userDetails.profile.badge)}>
+                        {userDetails.profile.badge} Trader
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className="row">
                 <div className="col-md-6">
                   <h6>Basic Information</h6>

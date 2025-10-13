@@ -31,6 +31,10 @@ const userSchema = new mongoose.Schema({
     phone: String,
     phone2: String,
     birthday: Date,
+    profilePicture: {
+      url: String,
+      filename: String
+    },
     address: {
       street: String,
       city: String,

@@ -1,4 +1,37 @@
 const User = require('../models/User');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = 'uploads/profile-pictures/';
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'profile-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: function (req, file, cb) {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
 
 // Get all users (admin only)
 exports.getUsers = async (req, res) => {
@@ -30,7 +63,8 @@ exports.updateProfile = async (req, res) => {
       firstName,
       lastName,
       phone2,
-      discordId
+      discordId,
+      profilePicture
     } = req.body;
     
     const updateData = {
@@ -42,7 +76,8 @@ exports.updateProfile = async (req, res) => {
       'profile.firstName': firstName,
       'profile.lastName': lastName,
       'profile.phone2': phone2,
-      'profile.discordId': discordId
+      'profile.discordId': discordId,
+      'profile.profilePicture': profilePicture
     };
 
     // Add address fields if provided
@@ -81,6 +116,72 @@ exports.updateProfile = async (req, res) => {
     });
   }
 };
+
+// Upload profile picture
+exports.uploadProfilePicture = [
+  upload.single('profilePicture'),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: 'No file uploaded'
+        });
+      }
+
+      // Use absolute URL for the uploaded file to fix 404 issue
+      const baseUrl = process.env.NODE_ENV === 'production' 
+        ? `${req.protocol}://${req.get('host')}`
+        : 'http://localhost:5000'; // Your backend port
+
+      const profilePicture = {
+        url: `${baseUrl}/uploads/profile-pictures/${req.file.filename}`,
+        filename: req.file.filename
+      };
+
+      // Update user's profile picture
+      const user = await User.findByIdAndUpdate(
+        req.user.id,
+        {
+          $set: {
+            'profile.profilePicture': profilePicture
+          }
+        },
+        { new: true }
+      ).select('-password');
+
+      if (!user) {
+        // Delete the uploaded file if user not found
+        fs.unlinkSync(req.file.path);
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Profile picture uploaded successfully',
+        profilePicture,
+        user
+      });
+
+    } catch (error) {
+      console.error('Profile picture upload error:', error);
+      
+      // Delete the uploaded file if there was an error
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error uploading profile picture',
+        error: error.message
+      });
+    }
+  }
+];
 
 // Get current user profile
 exports.getCurrentUser = async (req, res) => {

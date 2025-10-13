@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Container, Row, Col, Card, Badge, Table, Form, Button, Spinner, Alert } from 'react-bootstrap'
+import { Container, Row, Col, Card, Badge, Table, Form, Button, Spinner, Alert, Image } from 'react-bootstrap'
 import { useAuth } from '../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
@@ -13,6 +13,7 @@ const Traders = () => {
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [uploading, setUploading] = useState(false)
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -29,7 +30,11 @@ const Traders = () => {
     tradingViewId: '',
     vishcardId: '',
     tradingSegment: '',
-    discordId: ''
+    discordId: '',
+    profilePicture: {
+      url: '',
+      filename: ''
+    }
   })
 
   // Get user ID from auth context
@@ -88,7 +93,11 @@ const Traders = () => {
             tradingViewId: userProfile.profile.tradingViewId || '',
             vishcardId: userProfile.profile.vishcardId || '',
             tradingSegment: userProfile.profile.tradingSegment || '',
-            discordId: userProfile.profile.discordId || ''
+            discordId: userProfile.profile.discordId || '',
+            profilePicture: userProfile.profile.profilePicture || {
+              url: '',
+              filename: ''
+            }
           })
         }
 
@@ -126,6 +135,64 @@ const Traders = () => {
         ...prev,
         [name]: value
       }))
+    }
+  }
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    // Check file type and size
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file (JPG, PNG, etc.)')
+      return
+    }
+
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      alert('File size should be less than 5MB')
+      return
+    }
+
+    try {
+      setUploading(true)
+      
+      // Create form data for file upload
+      const uploadFormData = new FormData()
+      uploadFormData.append('profilePicture', file)
+
+      const token = localStorage.getItem('token')
+      const response = await axios.post('/api/users/upload-profile-picture', uploadFormData, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      })
+
+      if (response.data.success) {
+        // Update form data with the uploaded image URL
+        setFormData(prev => ({
+          ...prev,
+          profilePicture: response.data.profilePicture
+        }))
+        
+        // Update profile state immediately for preview
+        setProfile(prev => ({
+          ...prev,
+          profile: {
+            ...prev.profile,
+            profilePicture: response.data.profilePicture
+          }
+        }))
+        
+        alert('Profile picture uploaded successfully!')
+      }
+    } catch (error) {
+      console.error('Error uploading profile picture:', error)
+      const errorMessage = error.response?.data?.message || 
+        'Failed to upload profile picture. Please try again.'
+      alert(errorMessage)
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -223,6 +290,22 @@ const Traders = () => {
     }
   }
 
+  // Get profile picture URL or return null
+  const getProfilePicture = () => {
+    if (profile?.profile?.profilePicture?.url) {
+      return profile.profile.profilePicture.url
+    }
+    return null
+  }
+
+  // Get initials for avatar fallback
+  const getInitials = () => {
+    if (profile?.profile?.firstName && profile?.profile?.lastName) {
+      return `${profile.profile.firstName.charAt(0)}${profile.profile.lastName.charAt(0)}`.toUpperCase()
+    }
+    return user?.username?.charAt(0).toUpperCase() || 'U'
+  }
+
   if (loading) {
     return (
       <Container className={styles.tradersPage}>
@@ -285,10 +368,50 @@ const Traders = () => {
             {/* Profile Card */}
             <Card className="shadow-sm">
               <Card.Body className="text-center">
-                <div className={`${styles.avatar} bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3`} 
-                     style={{width: '80px', height: '80px', fontSize: '2rem'}}>
-                  {user?.username?.charAt(0).toUpperCase() || 'U'}
+                <div className="position-relative d-inline-block">
+                  {getProfilePicture() ? (
+                    <Image
+                      src={getProfilePicture()}
+                      roundedCircle
+                      className="mb-3"
+                      style={{width: '80px', height: '80px', objectFit: 'cover'}}
+                      alt="Profile"
+                    />
+                  ) : (
+                    <div 
+                      className={`${styles.avatar} bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3`} 
+                      style={{width: '80px', height: '80px', fontSize: '2rem'}}
+                    >
+                      {getInitials()}
+                    </div>
+                  )}
+                  {isEditing && (
+                    <div className="position-absolute bottom-0 end-0">
+                      <Form.Group controlId="formProfilePicture">
+                        <Form.Label 
+                          className="btn btn-light btn-sm rounded-circle shadow-sm"
+                          style={{cursor: 'pointer', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}
+                          title="Change profile picture"
+                        >
+                          <i className="fas fa-camera" style={{fontSize: '0.8rem'}}></i>
+                          <Form.Control
+                            type="file"
+                            accept="image/*"
+                            onChange={handleFileUpload}
+                            style={{display: 'none'}}
+                            disabled={uploading}
+                          />
+                        </Form.Label>
+                      </Form.Group>
+                    </div>
+                  )}
                 </div>
+                {uploading && (
+                  <div className="mb-2">
+                    <Spinner animation="border" size="sm" />
+                    <small className="ms-2">Uploading...</small>
+                  </div>
+                )}
                 <h4 className="mb-1">{user?.username || 'User'}</h4>
                 <p className="text-muted mb-3">{user?.email || 'No email'}</p>
                 
@@ -409,6 +532,44 @@ const Traders = () => {
               <Card.Body>
                 {isEditing ? (
                   <Form onSubmit={handleSubmit}>
+                    {/* Profile Picture Upload Section */}
+                    <Row className="mb-4">
+                      <Col md={12}>
+                        <Form.Group>
+                          <Form.Label>Profile Picture</Form.Label>
+                          <div className="d-flex align-items-center">
+                            {formData.profilePicture?.url ? (
+                              <Image
+                                src={formData.profilePicture.url}
+                                roundedCircle
+                                style={{width: '60px', height: '60px', objectFit: 'cover'}}
+                                className="me-3"
+                                alt="Current profile"
+                              />
+                            ) : (
+                              <div 
+                                className="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center me-3"
+                                style={{width: '60px', height: '60px', fontSize: '1.2rem'}}
+                              >
+                                {getInitials()}
+                              </div>
+                            )}
+                            <div className="flex-grow-1">
+                              <Form.Control
+                                type="file"
+                                accept="image/*"
+                                onChange={handleFileUpload}
+                                disabled={uploading}
+                              />
+                              <Form.Text className="text-muted">
+                                Upload a profile picture (JPG, PNG, max 5MB)
+                              </Form.Text>
+                            </div>
+                          </div>
+                        </Form.Group>
+                      </Col>
+                    </Row>
+
                     <Row>
                       <Col md={6}>
                         <Form.Group className="mb-3">
@@ -613,14 +774,14 @@ const Traders = () => {
                     </Row>
 
                     <div className="d-flex gap-2">
-                      <Button type="submit" variant="primary" disabled={loading}>
+                      <Button type="submit" variant="primary" disabled={loading || uploading}>
                         {loading ? 'Saving...' : 'Save Changes'}
                       </Button>
                       <Button 
                         type="button" 
                         variant="outline-secondary"
                         onClick={() => setIsEditing(false)}
-                        disabled={loading}
+                        disabled={loading || uploading}
                       >
                         Cancel
                       </Button>
@@ -628,6 +789,44 @@ const Traders = () => {
                   </Form>
                 ) : (
                   <div>
+                    {/* Profile Picture Display */}
+                    <Row className="mb-4">
+                      <Col md={12}>
+                        <div className="d-flex align-items-center">
+                          {getProfilePicture() ? (
+                            <Image
+                              src={getProfilePicture()}
+                              roundedCircle
+                              style={{width: '80px', height: '80px', objectFit: 'cover'}}
+                              className="me-4"
+                              alt="Profile"
+                            />
+                          ) : (
+                            <div 
+                              className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-4"
+                              style={{width: '80px', height: '80px', fontSize: '1.8rem'}}
+                            >
+                              {getInitials()}
+                            </div>
+                          )}
+                          <div>
+                            <h5 className="mb-1">
+                              {profile?.profile?.firstName || 'Not provided'} {profile?.profile?.lastName || ''}
+                            </h5>
+                            <p className="text-muted mb-0">{user?.email}</p>
+                            {profile?.profile?.badge && (
+                              <Badge 
+                                bg={getBadgeVariant(profile.profile.badge)}
+                                className="mt-1"
+                              >
+                                {profile.profile.badge} Trader
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </Col>
+                    </Row>
+
                     <Row>
                       <Col sm={6}>
                         <div className="mb-3">
