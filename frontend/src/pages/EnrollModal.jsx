@@ -20,6 +20,7 @@ const EnrollModal = ({ show, onHide, course, onEnrollSuccess, showAlert }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  // ✅ Coupon validation + lock logic (apply coupon)
   const validateCoupon = async () => {
     if (!couponCode.trim() || !course) {
       setValidatedCoupon(null);
@@ -29,9 +30,10 @@ const EnrollModal = ({ show, onHide, course, onEnrollSuccess, showAlert }) => {
     setCouponLoading(true);
     try {
       const totalAmount = course.discountedPrice || course.price;
-      
+
+      // 🔸 use apply API (locks coupon if valid)
       const response = await axios.post(
-        "/api/coupons/validate",
+        "/api/coupons/apply",
         {
           code: couponCode,
           totalAmount: totalAmount,
@@ -48,7 +50,7 @@ const EnrollModal = ({ show, onHide, course, onEnrollSuccess, showAlert }) => {
     } catch (error) {
       setValidatedCoupon(null);
       showAlert(
-        error.response?.data?.message || "Invalid coupon code",
+        error.response?.data?.message || "Invalid or already used coupon",
         "danger"
       );
     } finally {
@@ -56,22 +58,22 @@ const EnrollModal = ({ show, onHide, course, onEnrollSuccess, showAlert }) => {
     }
   };
 
+  // ✅ Enrollment logic
   const handleEnrollConfirm = async () => {
     if (!course) return;
 
     setEnrolling(true);
     try {
       const finalPrice = calculateFinalPrice();
-      
-      // Check if course is free OR if coupon makes it free OR final price is 0
+
+      // ✅ FREE ENROLLMENT
       if (isCourseFree(course) || finalPrice === 0) {
-        // Direct enrollment for free courses or zero-priced courses after coupon
         await axios.post(
           "/api/enrollments",
           {
             courseId: course._id,
             couponCode: validatedCoupon?.coupon?.code || couponCode,
-            finalAmount: finalPrice
+            finalAmount: finalPrice,
           },
           {
             headers: {
@@ -83,22 +85,21 @@ const EnrollModal = ({ show, onHide, course, onEnrollSuccess, showAlert }) => {
         showAlert("Enrolled successfully! Redirecting to course...", "success");
         onEnrollSuccess();
 
-        // Redirect immediately to learning page
         setTimeout(() => {
           navigate(`/learning/${course._id}`);
         }, 1500);
       } else {
-        // For paid courses in local development, simulate successful enrollment
-        // Remove this in production and use the actual payment flow
-        if (process.env.NODE_ENV === 'development') {
+        // ✅ PAID ENROLLMENT
+        if (process.env.NODE_ENV === "development") {
+          // 🔸 simulate payment in development
           console.log("Local development: Simulating enrollment without payment");
-          
+
           await axios.post(
             "/api/enrollments",
             {
               courseId: course._id,
               couponCode: validatedCoupon?.coupon?.code || couponCode,
-              isFreeEnrollment: calculateFinalPrice() === 0
+              finalAmount: finalPrice,
             },
             {
               headers: {
@@ -114,7 +115,7 @@ const EnrollModal = ({ show, onHide, course, onEnrollSuccess, showAlert }) => {
             navigate(`/learning/${course._id}`);
           }, 1500);
         } else {
-          // Production payment flow
+          // 🔸 Razorpay payment flow in production
           const paymentResponse = await axios.post(
             "/api/payments/create-order",
             {
@@ -131,7 +132,6 @@ const EnrollModal = ({ show, onHide, course, onEnrollSuccess, showAlert }) => {
 
           const { order, payment } = paymentResponse.data;
 
-          // Initialize Razorpay
           const options = {
             key: process.env.REACT_APP_RAZORPAY_KEY_ID,
             amount: payment.amount * 100,
@@ -197,6 +197,7 @@ const EnrollModal = ({ show, onHide, course, onEnrollSuccess, showAlert }) => {
     }
   };
 
+  // ✅ Helpers
   const isCourseFree = (course) => {
     if (!course) return false;
     return course.price === 0 || course.discountedPrice === 0;
@@ -208,7 +209,6 @@ const EnrollModal = ({ show, onHide, course, onEnrollSuccess, showAlert }) => {
     let price = course.discountedPrice || course.price;
 
     if (validatedCoupon && validatedCoupon.success) {
-      // Use the discountAmount calculated by the backend
       price = validatedCoupon.finalAmount;
     }
 

@@ -1,5 +1,5 @@
 // components/Learning.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Container,
   Row,
@@ -10,7 +10,8 @@ import {
   Badge,
   Spinner,
   Alert,
-  ProgressBar
+  ProgressBar,
+  Modal
 } from "react-bootstrap";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -26,10 +27,20 @@ const Learning = () => {
   const [completedContents, setCompletedContents] = useState(new Set());
   const [progress, setProgress] = useState({ completed: 0, total: 0, percentage: 0 });
   const [markingComplete, setMarkingComplete] = useState(false);
+  const [videoProgress, setVideoProgress] = useState({});
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [nextContent, setNextContent] = useState(null);
+  const [completionInProgress, setCompletionInProgress] = useState(false);
+
+  const videoRef = useRef(null);
+  const progressIntervalRef = useRef(null);
 
   const { courseId } = useParams();
   const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
+
+  // Video completion threshold (90% watched)
+  const COMPLETION_THRESHOLD = 0.9;
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -38,6 +49,28 @@ const Learning = () => {
     }
     fetchCourseContent();
   }, [courseId, isAuthenticated]);
+
+  useEffect(() => {
+    // Cleanup interval on unmount
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    // Setup video tracking when current content changes to a video
+    if (currentContent?.type === 'video') {
+      setupVideoTracking();
+    } else {
+      // Cleanup interval when not on video content
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+    }
+  }, [currentContent]);
 
   const fetchCourseContent = async () => {
     try {
@@ -57,6 +90,20 @@ const Learning = () => {
         percentage: response.data.progress.percentage
       });
       
+      // Initialize video progress tracking
+      const initialVideoProgress = {};
+      response.data.content.forEach(content => {
+        if (content.type === 'video') {
+          initialVideoProgress[content._id] = {
+            currentTime: 0,
+            duration: 0,
+            percentage: 0,
+            completed: false
+          };
+        }
+      });
+      setVideoProgress(initialVideoProgress);
+      
       // Set first content as current if available
       if (response.data.content.length > 0) {
         setCurrentContent(response.data.content[0]);
@@ -68,7 +115,6 @@ const Learning = () => {
       setError(errorMessage);
       
       if (error.response?.status === 403) {
-        // User not enrolled, redirect to course page
         setTimeout(() => {
           navigate(`/course/${courseId}`);
         }, 3000);
@@ -78,60 +124,149 @@ const Learning = () => {
     }
   };
 
-  const handleContentSelect = (content) => {
-    setCurrentContent(content);
+  const setupVideoTracking = () => {
+    if (!videoRef.current) return;
+
+    const video = videoRef.current;
+
+    const handleLoadedMetadata = () => {
+      setVideoProgress(prev => ({
+        ...prev,
+        [currentContent._id]: {
+          ...prev[currentContent._id],
+          duration: video.duration
+        }
+      }));
+    };
+
+    const handleTimeUpdate = () => {
+      if (!video.duration) return;
+
+      const currentTime = video.currentTime;
+      const duration = video.duration;
+      const percentage = currentTime / duration;
+
+      setVideoProgress(prev => ({
+        ...prev,
+        [currentContent._id]: {
+          currentTime,
+          duration,
+          percentage,
+          completed: percentage >= COMPLETION_THRESHOLD
+        }
+      }));
+
+      // Auto-mark as completed when threshold is reached
+      if (percentage >= COMPLETION_THRESHOLD && 
+          !completedContents.has(currentContent._id) && 
+          !completionInProgress) {
+        handleVideoCompletion();
+      }
+    };
+
+    const handleEnded = () => {
+      if (!completedContents.has(currentContent._id) && !completionInProgress) {
+        handleVideoCompletion();
+      }
+    };
+
+    video.addEventListener('loadedmetadata', handleLoadedMetadata);
+    video.addEventListener('timeupdate', handleTimeUpdate);
+    video.addEventListener('ended', handleEnded);
+
+    // Start progress tracking interval
+    progressIntervalRef.current = setInterval(() => {
+      if (video.readyState > 0) {
+        handleTimeUpdate();
+      }
+    }, 1000);
+
+    return () => {
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      video.removeEventListener('timeupdate', handleTimeUpdate);
+      video.removeEventListener('ended', handleEnded);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+    };
   };
 
-  const markAsCompleted = async (contentId) => {
+  const handleVideoCompletion = async () => {
+    if (completedContents.has(currentContent._id)) return;
+    
+    // Prevent multiple calls
+    if (completionInProgress) return;
+
     try {
+      setCompletionInProgress(true);
       setMarkingComplete(true);
-      const response = await axios.post(
-        `/api/course-content/${contentId}/complete`,
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`
-          }
-        }
-      );
       
-      setCompletedContents(prev => new Set(prev.add(contentId)));
-      setProgress(response.data.progress);
-      setEnrollment(prev => ({
-        ...prev,
-        ...response.data.enrollment
-      }));
+      const response = await markContentAsCompleted(currentContent._id);
       
-      // Auto-advance to next content if available
-      const currentIndex = courseContent.findIndex(content => content._id === contentId);
-      if (currentIndex < courseContent.length - 1) {
-        setTimeout(() => {
-          setCurrentContent(courseContent[currentIndex + 1]);
-        }, 1000);
-      }
+      // Find next content
+      const currentIndex = courseContent.findIndex(content => content._id === currentContent._id);
+      const nextContentItem = currentIndex < courseContent.length - 1 ? courseContent[currentIndex + 1] : null;
+      
+      setNextContent(nextContentItem);
+      setShowCompletionModal(true);
+      
     } catch (error) {
-      console.error("Error marking content complete:", error);
-      alert("Failed to mark as completed. Please try again.");
+      console.error("Error completing video:", error);
     } finally {
       setMarkingComplete(false);
+      setCompletionInProgress(false);
     }
+  };
+
+  const markContentAsCompleted = async (contentId) => {
+    const response = await axios.post(
+      `/api/course-content/${contentId}/complete`,
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`
+        }
+      }
+    );
+    
+    setCompletedContents(prev => new Set(prev.add(contentId)));
+    setProgress(response.data.progress);
+    setEnrollment(prev => ({
+      ...prev,
+      ...response.data.enrollment
+    }));
+
+    return response.data;
+  };
+
+  const handleContentSelect = (content) => {
+    setCurrentContent(content);
+    // Reset video progress tracking for new content
+    if (content.type === 'video' && videoRef.current) {
+      videoRef.current.currentTime = 0;
+    }
+  };
+
+  const handleContinueLearning = () => {
+    setShowCompletionModal(false);
+    if (nextContent) {
+      setCurrentContent(nextContent);
+    }
+  };
+
+  const handleStayOnContent = () => {
+    setShowCompletionModal(false);
   };
 
   const getContentIcon = (type) => {
-    switch (type) {
-      case 'video':
-        return '🎬';
-      case 'pdf':
-        return '📄';
-      case 'document':
-        return '📝';
-      case 'quiz':
-        return '❓';
-      case 'assignment':
-        return '📋';
-      default:
-        return '📁';
-    }
+    const icons = {
+      'video': '🎬',
+      'pdf': '📄',
+      'document': '📝',
+      'quiz': '❓',
+      'assignment': '📋'
+    };
+    return icons[type] || '📁';
   };
 
   const getDurationText = (content) => {
@@ -151,22 +286,20 @@ const Learning = () => {
   };
 
   const getVideoUrl = (content) => {
-  if (content.videoUrl) return content.videoUrl;
-  if (content.videoFile?.url) {
-    // Prepend backend URL for uploaded files
-    return `http://localhost:5000${content.videoFile.url}`;
-  }
-  return null;
-};
+    if (content.videoUrl) return content.videoUrl;
+    if (content.videoFile?.url) {
+      return `http://localhost:5000${content.videoFile.url}`;
+    }
+    return null;
+  };
 
-const getDocumentUrl = (content) => {
-  if (content.documentUrl) return content.documentUrl;
-  if (content.documentFile?.url) {
-    // Prepend backend URL for uploaded files
-    return `http://localhost:5000${content.documentFile.url}`;
-  }
-  return null;
-};
+  const getDocumentUrl = (content) => {
+    if (content.documentUrl) return content.documentUrl;
+    if (content.documentFile?.url) {
+      return `http://localhost:5000${content.documentFile.url}`;
+    }
+    return null;
+  };
 
   const formatEnrollmentDate = (date) => {
     return new Date(date).toLocaleDateString('en-US', {
@@ -174,6 +307,16 @@ const getDocumentUrl = (content) => {
       month: 'long',
       day: 'numeric'
     });
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const getVideoProgress = (contentId) => {
+    return videoProgress[contentId] || { currentTime: 0, duration: 0, percentage: 0, completed: false };
   };
 
   if (loading) {
@@ -248,52 +391,74 @@ const getDocumentUrl = (content) => {
               </Card.Header>
               <Card.Body className={styles.sidebarBody}>
                 <ListGroup variant="flush">
-                  {courseContent.map((content, index) => (
-                    <ListGroup.Item
-                      key={content._id}
-                      className={`${styles.contentItem} ${
-                        currentContent?._id === content._id ? styles.active : ''
-                      }`}
-                      onClick={() => handleContentSelect(content)}
-                    >
-                      <div className={styles.contentInfo}>
-                        <div className={styles.contentIcon}>
-                          {getContentIcon(content.type)}
-                        </div>
-                        <div className={styles.contentDetails}>
-                          <div className={styles.contentTitle}>
-                            {content.title}
+                  {courseContent.map((content, index) => {
+                    const isVideo = content.type === 'video';
+                    const videoProg = getVideoProgress(content._id);
+                    const isCompleted = completedContents.has(content._id);
+                    
+                    return (
+                      <ListGroup.Item
+                        key={content._id}
+                        className={`${styles.contentItem} ${
+                          currentContent?._id === content._id ? styles.active : ''
+                        }`}
+                        onClick={() => handleContentSelect(content)}
+                      >
+                        <div className={styles.contentInfo}>
+                          <div className={styles.contentIcon}>
+                            {getContentIcon(content.type)}
                           </div>
-                          <div className={styles.contentMeta}>
-                            <span className={styles.contentType}>
-                              {content.type}
-                            </span>
-                            {getDurationText(content) && (
-                              <span className={styles.contentDuration}>
-                                • {getDurationText(content)}
+                          <div className={styles.contentDetails}>
+                            <div className={styles.contentTitle}>
+                              {content.title}
+                            </div>
+                            <div className={styles.contentMeta}>
+                              <span className={styles.contentType}>
+                                {content.type}
                               </span>
-                            )}
-                            {content.isFree && (
-                              <Badge bg="success" className={styles.freeBadge}>
-                                Free
-                              </Badge>
+                              {getDurationText(content) && (
+                                <span className={styles.contentDuration}>
+                                  • {getDurationText(content)}
+                                </span>
+                              )}
+                              {content.isFree && (
+                                <Badge bg="success" className={styles.freeBadge}>
+                                  Free
+                                </Badge>
+                              )}
+                            </div>
+                            {isVideo && videoProg.percentage > 0 && !isCompleted && (
+                              <div className={styles.videoProgress}>
+                                <ProgressBar 
+                                  now={videoProg.percentage * 100} 
+                                  variant="info" 
+                                  className={styles.miniProgressBar}
+                                />
+                                <small className={styles.videoTime}>
+                                  {formatTime(videoProg.currentTime)} / {formatTime(videoProg.duration)}
+                                </small>
+                              </div>
                             )}
                           </div>
                         </div>
-                      </div>
-                      <div className={styles.contentStatus}>
-                        {completedContents.has(content._id) ? (
-                          <Badge bg="success" className={styles.completedBadge}>
-                            ✓
-                          </Badge>
-                        ) : (
-                          <div className={styles.contentOrder}>
-                            {index + 1}
-                          </div>
-                        )}
-                      </div>
-                    </ListGroup.Item>
-                  ))}
+                        <div className={styles.contentStatus}>
+                          {isCompleted ? (
+                            <Badge bg="success" className={styles.completedBadge}>
+                              ✓
+                            </Badge>
+                          ) : isVideo && videoProg.completed ? (
+                            <Badge bg="warning" className={styles.pendingBadge}>
+                              ⏳
+                            </Badge>
+                          ) : (
+                            <div className={styles.contentOrder}>
+                              {index + 1}
+                            </div>
+                          )}
+                        </div>
+                      </ListGroup.Item>
+                    );
+                  })}
                 </ListGroup>
               </Card.Body>
             </Card>
@@ -315,13 +480,18 @@ const getDocumentUrl = (content) => {
                           Duration: {currentContent.duration}
                         </span>
                       )}
+                      {currentContent.type === 'video' && videoProgress[currentContent._id] && (
+                        <span className={styles.watchProgress}>
+                          Watched: {Math.round(videoProgress[currentContent._id].percentage * 100)}%
+                        </span>
+                      )}
                     </div>
                   </div>
-                  {!completedContents.has(currentContent._id) && (
+                  {!completedContents.has(currentContent._id) && currentContent.type !== 'video' && (
                     <Button
                       variant="success"
                       size="sm"
-                      onClick={() => markAsCompleted(currentContent._id)}
+                      onClick={() => markContentAsCompleted(currentContent._id)}
                       disabled={markingComplete}
                     >
                       {markingComplete ? (
@@ -347,14 +517,38 @@ const getDocumentUrl = (content) => {
                   {currentContent.type === 'video' && (
                     <div className={styles.videoContainer}>
                       {getVideoUrl(currentContent) ? (
-                        <video
-                          controls
-                          className={styles.videoPlayer}
-                          src={getVideoUrl(currentContent)}
-                          controlsList="nodownload"
-                        >
-                          Your browser does not support the video tag.
-                        </video>
+                        <div className={styles.videoWrapper}>
+                          <video
+                            ref={videoRef}
+                            controls
+                            className={styles.videoPlayer}
+                            src={getVideoUrl(currentContent)}
+                            controlsList="nodownload"
+                            preload="metadata"
+                          >
+                            Your browser does not support the video tag.
+                          </video>
+                          <div className={styles.videoStats}>
+                            <div className={styles.progressInfo}>
+                              <span>Progress: </span>
+                              <ProgressBar 
+                                now={getVideoProgress(currentContent._id).percentage * 100} 
+                                variant="primary"
+                                className={styles.videoProgressBar}
+                              />
+                              <span>
+                                {formatTime(getVideoProgress(currentContent._id).currentTime)} / 
+                                {formatTime(getVideoProgress(currentContent._id).duration)}
+                              </span>
+                            </div>
+                            {completionInProgress && (
+                              <Alert variant="info" className={styles.completionAlert}>
+                                <Spinner animation="border" size="sm" className="me-2" />
+                                Marking as completed...
+                              </Alert>
+                            )}
+                          </div>
+                        </div>
                       ) : (
                         <div className={styles.noContent}>
                           <p>Video content not available</p>
@@ -369,7 +563,7 @@ const getDocumentUrl = (content) => {
                     </div>
                   )}
 
-                  {/* Document/PDF Content */}
+                  {/* Document Content */}
                   {(currentContent.type === 'document' || currentContent.type === 'pdf') && (
                     <div className={styles.documentContainer}>
                       {getDocumentUrl(currentContent) ? (
@@ -400,7 +594,7 @@ const getDocumentUrl = (content) => {
                         <p>Interactive quizzes are under development and will be available soon.</p>
                         <Button 
                           variant="outline-primary"
-                          onClick={() => markAsCompleted(currentContent._id)}
+                          onClick={() => markContentAsCompleted(currentContent._id)}
                           disabled={completedContents.has(currentContent._id)}
                         >
                           Mark as Completed
@@ -417,7 +611,7 @@ const getDocumentUrl = (content) => {
                         <p>Assignment submissions are under development and will be available soon.</p>
                         <Button 
                           variant="outline-primary"
-                          onClick={() => markAsCompleted(currentContent._id)}
+                          onClick={() => markContentAsCompleted(currentContent._id)}
                           disabled={completedContents.has(currentContent._id)}
                         >
                           Mark as Completed
@@ -427,7 +621,6 @@ const getDocumentUrl = (content) => {
                   )}
                 </Card.Body>
 
-                {/* Navigation Buttons */}
                 <Card.Footer className={styles.contentFooter}>
                   <div className={styles.navigation}>
                     <Button
@@ -491,6 +684,29 @@ const getDocumentUrl = (content) => {
           </Col>
         </Row>
       </Container>
+
+      {/* Completion Modal */}
+      <Modal show={showCompletionModal} onHide={handleStayOnContent} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>🎉 Content Completed!</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p>You've successfully completed <strong>{currentContent?.title}</strong>!</p>
+          {nextContent ? (
+            <p>Ready to move on to the next lesson: <strong>{nextContent.title}</strong>?</p>
+          ) : (
+            <p>Congratulations! You've completed all the content in this course.</p>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleStayOnContent}>
+            Stay on This Lesson
+          </Button>
+          <Button variant="primary" onClick={handleContinueLearning}>
+            {nextContent ? 'Continue to Next Lesson' : 'View Course Completion'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 };

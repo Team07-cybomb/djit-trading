@@ -26,9 +26,24 @@ const userSchema = new mongoose.Schema({
     default: 'user'
   },
   profile: {
+    firstName: String,
+    lastName: String,
     phone: String,
+    phone2: String,
     birthday: Date,
+    profilePicture: {
+      url: String,
+      filename: String
+    },
     address: {
+      street: String,
+      city: String,
+      state: String,
+      zipCode: String,
+      country: String
+    },
+    address2: {
+      type: String,
       street: String,
       city: String,
       state: String,
@@ -39,12 +54,18 @@ const userSchema = new mongoose.Schema({
     vishcardId: String,
     tradingSegment: {
       type: String,
-      enum: ['Stock', 'Options', 'Forex']
+      enum: ['Stock', 'Options', 'Forex', '']
     },
     badge: {
       type: String,
       default: 'Beginner'
-    }
+    },
+    discordId: String,
+    labels: [String],
+    emailSubscriberStatus: String,
+    smsSubscriberStatus: String,
+    source: String,
+    language: String
   },
   isVerified: {
     type: Boolean,
