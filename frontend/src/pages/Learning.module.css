@@ -2,6 +2,7 @@
 .learningPage {
   background-color: #f8f9fa;
   min-height: 100vh;
+  padding-top: 110px;
 }
 
 .loadingContainer,
@@ -345,6 +346,7 @@
     height: 400px;
   }
 }
+
 
 @media (max-width: 575.98px) {
   .navigation {

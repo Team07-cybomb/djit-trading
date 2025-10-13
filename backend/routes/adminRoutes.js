@@ -65,23 +65,35 @@ router.get('/dashboard', async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
-router.get('/users', adminAuth, async (req, res) => {
+
+// ========== ENHANCED USER MANAGEMENT ROUTES ==========
+
+// Get all users with advanced search and pagination
+router.get('/users', async (req, res) => {
   try {
     const { page = 1, limit = 10, search = '' } = req.query;
-    const query = search ? {
-      $or: [
-        { username: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } }
-      ]
-    } : {};
+    
+    let searchFilter = {};
+    if (search) {
+      searchFilter = {
+        $or: [
+          { username: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } },
+          { 'profile.firstName': { $regex: search, $options: 'i' } },
+          { 'profile.lastName': { $regex: search, $options: 'i' } },
+          { 'profile.phone': { $regex: search, $options: 'i' } },
+          { 'profile.tradingSegment': { $regex: search, $options: 'i' } }
+        ]
+      };
+    }
 
-    const users = await User.find(query)
+    const users = await User.find(searchFilter)
       .select('-password')
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);
 
-    const total = await User.countDocuments(query);
+    const total = await User.countDocuments(searchFilter);
 
     res.json({
       success: true,
@@ -95,8 +107,21 @@ router.get('/users', adminAuth, async (req, res) => {
   }
 });
 
+// Get detailed user information
+router.get('/users/:id/details', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select('-password');
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    res.json({ success: true, user });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error fetching user details', error: error.message });
+  }
+});
+
 // Update user role
-router.put('/users/:id/role', adminAuth, async (req, res) => {
+router.put('/users/:id/role', async (req, res) => {
   try {
     const { role } = req.body;
     const user = await User.findByIdAndUpdate(
@@ -116,7 +141,7 @@ router.put('/users/:id/role', adminAuth, async (req, res) => {
 });
 
 // Delete user
-router.delete('/users/:id', adminAuth, async (req, res) => {
+router.delete('/users/:id', async (req, res) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);
     if (!user) {
@@ -132,8 +157,10 @@ router.delete('/users/:id', adminAuth, async (req, res) => {
   }
 });
 
+// ========== EXISTING ENROLLMENT ROUTES ==========
+
 // Get all enrollments with filters
-router.get('/enrollments', adminAuth, async (req, res) => {
+router.get('/enrollments', async (req, res) => {
   try {
     const { page = 1, limit = 10, status = '', course = '' } = req.query;
     const query = {};
@@ -163,7 +190,7 @@ router.get('/enrollments', adminAuth, async (req, res) => {
 });
 
 // Update enrollment status
-router.put('/enrollments/:id', adminAuth, async (req, res) => {
+router.put('/enrollments/:id', async (req, res) => {
   try {
     const { progress, completed, paymentStatus } = req.body;
     const enrollment = await Enrollment.findByIdAndUpdate(
@@ -183,8 +210,10 @@ router.put('/enrollments/:id', adminAuth, async (req, res) => {
   }
 });
 
+// ========== EXISTING NEWSLETTER ROUTES ==========
+
 // Get all newsletter subscribers
-router.get('/newsletter', adminAuth, async (req, res) => {
+router.get('/newsletter', async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;
     
@@ -208,7 +237,7 @@ router.get('/newsletter', adminAuth, async (req, res) => {
 });
 
 // Send newsletter to all subscribers
-router.post('/newsletter/send', adminAuth, async (req, res) => {
+router.post('/newsletter/send', async (req, res) => {
   try {
     const { subject, content } = req.body;
     const subscribers = await Newsletter.find({ isActive: true });
@@ -237,7 +266,111 @@ router.post('/newsletter/send', adminAuth, async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
-// ... rest of your existing admin routes remain the same
-// All routes will automatically have req.admin available
+
+// ========== ADDITIONAL ADMIN ROUTES ==========
+
+// Get user statistics
+router.get('/users-stats', async (req, res) => {
+  try {
+    const [
+      totalUsers,
+      verifiedUsers,
+      adminUsers,
+      usersThisMonth,
+      usersByTradingSegment
+    ] = await Promise.all([
+      User.countDocuments(),
+      User.countDocuments({ isVerified: true }),
+      User.countDocuments({ role: 'admin' }),
+      User.countDocuments({
+        createdAt: { 
+          $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) 
+        }
+      }),
+      User.aggregate([
+        { 
+          $group: { 
+            _id: '$profile.tradingSegment', 
+            count: { $sum: 1 } 
+          } 
+        },
+        { $sort: { count: -1 } }
+      ])
+    ]);
+
+    res.json({
+      success: true,
+      stats: {
+        totalUsers,
+        verifiedUsers,
+        adminUsers,
+        usersThisMonth,
+        usersByTradingSegment,
+        verificationRate: Math.round((verifiedUsers / totalUsers) * 100)
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Update user profile (admin override)
+router.put('/users/:id/profile', async (req, res) => {
+  try {
+    const {
+      phone,
+      birthday,
+      address,
+      tradingViewId,
+      vishcardId,
+      tradingSegment,
+      firstName,
+      lastName,
+      phone2,
+      discordId,
+      badge
+    } = req.body;
+
+    const updateData = {
+      'profile.phone': phone,
+      'profile.birthday': birthday,
+      'profile.tradingViewId': tradingViewId,
+      'profile.vishcardId': vishcardId,
+      'profile.tradingSegment': tradingSegment,
+      'profile.firstName': firstName,
+      'profile.lastName': lastName,
+      'profile.phone2': phone2,
+      'profile.discordId': discordId,
+      'profile.badge': badge
+    };
+
+    // Add address fields if provided
+    if (address) {
+      updateData['profile.address.street'] = address.street;
+      updateData['profile.address.city'] = address.city;
+      updateData['profile.address.state'] = address.state;
+      updateData['profile.address.zipCode'] = address.zipCode;
+      updateData['profile.address.country'] = address.country;
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'User profile updated successfully',
+      user
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error updating user profile', error: error.message });
+  }
+});
 
 module.exports = router;

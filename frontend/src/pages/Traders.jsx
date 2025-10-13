@@ -14,7 +14,10 @@ const Traders = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
     phone: '',
+    phone2: '',
     birthday: '',
     address: {
       street: '',
@@ -25,7 +28,8 @@ const Traders = () => {
     },
     tradingViewId: '',
     vishcardId: '',
-    tradingSegment: ''
+    tradingSegment: '',
+    discordId: ''
   })
 
   // Get user ID from auth context
@@ -72,7 +76,10 @@ const Traders = () => {
         const userProfile = profileResponse.data.user || profileResponse.data
         if (userProfile.profile) {
           setFormData({
+            firstName: userProfile.profile.firstName || '',
+            lastName: userProfile.profile.lastName || '',
             phone: userProfile.profile.phone || '',
+            phone2: userProfile.profile.phone2 || '',
             birthday: userProfile.profile.birthday ? 
               new Date(userProfile.profile.birthday).toISOString().split('T')[0] : '',
             address: userProfile.profile.address || {
@@ -80,7 +87,8 @@ const Traders = () => {
             },
             tradingViewId: userProfile.profile.tradingViewId || '',
             vishcardId: userProfile.profile.vishcardId || '',
-            tradingSegment: userProfile.profile.tradingSegment || ''
+            tradingSegment: userProfile.profile.tradingSegment || '',
+            discordId: userProfile.profile.discordId || ''
           })
         }
 
@@ -124,30 +132,27 @@ const Traders = () => {
   const handleSubmit = async (e) => {
     e.preventDefault()
     try {
+      setLoading(true)
       const token = localStorage.getItem('token')
-      await axios.put('/api/users/profile', formData, {
+      
+      const response = await axios.put('/api/users/profile', formData, {
         headers: { Authorization: `Bearer ${token}` }
       })
       
-      // Refetch data to update UI
-      setLoading(true)
-      const config = { headers: { Authorization: `Bearer ${token}` } }
-      const [profileResponse, enrollmentsResponse] = await Promise.all([
-        axios.get('/api/users/me', config).catch(() => 
-          axios.get(`/api/users/${getUserId()}`, config)
-        ),
-        axios.get('/api/enrollments/my-courses', config).catch(() =>
-          axios.get(`/api/enrollments/user/${getUserId()}`, config)
-        )
-      ])
-
-      setProfile(profileResponse.data.user || profileResponse.data)
-      setEnrollments(enrollmentsResponse.data.enrollments || enrollmentsResponse.data || [])
+      if (response.data.success) {
+        // Update local profile state with the returned user data
+        setProfile(response.data.user)
+        setIsEditing(false)
+        
+        // Show success message
+        alert('Profile updated successfully!')
+      }
       
-      setIsEditing(false)
     } catch (error) {
       console.error('Error updating profile:', error)
-      alert('Failed to update profile. Please try again.')
+      const errorMessage = error.response?.data?.message || 
+        'Failed to update profile. Please try again.'
+      alert(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -407,16 +412,58 @@ const Traders = () => {
                     <Row>
                       <Col md={6}>
                         <Form.Group className="mb-3">
+                          <Form.Label>First Name</Form.Label>
+                          <Form.Control
+                            type="text"
+                            name="firstName"
+                            value={formData.firstName}
+                            onChange={handleInputChange}
+                            placeholder="Enter first name"
+                          />
+                        </Form.Group>
+                      </Col>
+                      <Col md={6}>
+                        <Form.Group className="mb-3">
+                          <Form.Label>Last Name</Form.Label>
+                          <Form.Control
+                            type="text"
+                            name="lastName"
+                            value={formData.lastName}
+                            onChange={handleInputChange}
+                            placeholder="Enter last name"
+                          />
+                        </Form.Group>
+                      </Col>
+                    </Row>
+
+                    <Row>
+                      <Col md={6}>
+                        <Form.Group className="mb-3">
                           <Form.Label>Phone</Form.Label>
                           <Form.Control
                             type="tel"
                             name="phone"
                             value={formData.phone}
                             onChange={handleInputChange}
-                            placeholder="Enter phone number"
+                            placeholder="Enter primary phone number"
                           />
                         </Form.Group>
                       </Col>
+                      <Col md={6}>
+                        <Form.Group className="mb-3">
+                          <Form.Label>Alternate Phone</Form.Label>
+                          <Form.Control
+                            type="tel"
+                            name="phone2"
+                            value={formData.phone2}
+                            onChange={handleInputChange}
+                            placeholder="Enter alternate phone number"
+                          />
+                        </Form.Group>
+                      </Col>
+                    </Row>
+
+                    <Row>
                       <Col md={6}>
                         <Form.Group className="mb-3">
                           <Form.Label>Birthday</Form.Label>
@@ -425,6 +472,18 @@ const Traders = () => {
                             name="birthday"
                             value={formData.birthday}
                             onChange={handleInputChange}
+                          />
+                        </Form.Group>
+                      </Col>
+                      <Col md={6}>
+                        <Form.Group className="mb-3">
+                          <Form.Label>Discord ID</Form.Label>
+                          <Form.Control
+                            type="text"
+                            name="discordId"
+                            value={formData.discordId}
+                            onChange={handleInputChange}
+                            placeholder="Enter your Discord ID"
                           />
                         </Form.Group>
                       </Col>
@@ -554,13 +613,14 @@ const Traders = () => {
                     </Row>
 
                     <div className="d-flex gap-2">
-                      <Button type="submit" variant="primary">
-                        Save Changes
+                      <Button type="submit" variant="primary" disabled={loading}>
+                        {loading ? 'Saving...' : 'Save Changes'}
                       </Button>
                       <Button 
                         type="button" 
                         variant="outline-secondary"
                         onClick={() => setIsEditing(false)}
+                        disabled={loading}
                       >
                         Cancel
                       </Button>
@@ -571,8 +631,20 @@ const Traders = () => {
                     <Row>
                       <Col sm={6}>
                         <div className="mb-3">
+                          <strong>First Name:</strong>
+                          <div>{profile?.profile?.firstName || 'Not provided'}</div>
+                        </div>
+                        <div className="mb-3">
+                          <strong>Last Name:</strong>
+                          <div>{profile?.profile?.lastName || 'Not provided'}</div>
+                        </div>
+                        <div className="mb-3">
                           <strong>Phone:</strong>
                           <div>{profile?.profile?.phone || 'Not provided'}</div>
+                        </div>
+                        <div className="mb-3">
+                          <strong>Alternate Phone:</strong>
+                          <div>{profile?.profile?.phone2 || 'Not provided'}</div>
                         </div>
                         <div className="mb-3">
                           <strong>Birthday:</strong>
@@ -583,15 +655,19 @@ const Traders = () => {
                             }
                           </div>
                         </div>
+                      </Col>
+                      <Col sm={6}>
                         <div className="mb-3">
                           <strong>TradingView ID:</strong>
                           <div>{profile?.profile?.tradingViewId || 'Not provided'}</div>
                         </div>
-                      </Col>
-                      <Col sm={6}>
                         <div className="mb-3">
                           <strong>Vishcard ID:</strong>
                           <div>{profile?.profile?.vishcardId || 'Not provided'}</div>
+                        </div>
+                        <div className="mb-3">
+                          <strong>Discord ID:</strong>
+                          <div>{profile?.profile?.discordId || 'Not provided'}</div>
                         </div>
                         <div className="mb-3">
                           <strong>Trading Segment:</strong>
