@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Navbar, Nav, Container } from "react-bootstrap";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import logo from "../assets/logo.png";
 
 const Header = () => {
   const { user, logout, isAuthenticated } = useAuth();
@@ -66,13 +67,12 @@ const Header = () => {
         expanded={expanded}
       >
         <Container>
-          <Navbar.Brand
-            as={Link}
-            to="/"
-            className="custom-brand"
-            onClick={handleNavClick}
-          >
-            TradeMaster Pro
+          <Navbar.Brand as={Link} to="/" className="custom-brand" onClick={handleNavClick}>
+            <img
+              src={logo}
+              alt="TradeMaster Logo"
+              className="brand-logo"
+            />
           </Navbar.Brand>
 
           <Navbar.Toggle
@@ -533,6 +533,27 @@ const Header = () => {
         .custom-dropdown-item,
         .custom-dropdown-menu {
           transition: all 0.3s ease !important;
+        }
+        .brand-logo {
+          height: 45px;
+          width: auto;
+          object-fit: contain;
+        }
+
+        .custom-brand {
+          display: flex;
+          align-items: center;
+          text-decoration: none !important;
+        }
+
+        .custom-brand:hover {
+          text-decoration: none !important;
+        }
+
+        @media (max-width: 991px) {
+          .brand-logo {
+            height: 40px;
+          }
         }
       `}</style>
     </div>

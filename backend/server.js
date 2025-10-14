@@ -17,8 +17,8 @@ app.use(
 );
 
 // Body parsing middleware
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+app.use(express.json({ limit: "20gb" }));
+app.use(express.urlencoded({ extended: true, limit: "20gb" }));
 
 // Static files - Serve uploads directory
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -76,6 +76,8 @@ app.use("*", (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
 });
+// Disable timeout for large uploads
+server.setTimeout(0);
