@@ -1,0 +1,239 @@
+
+Authentication api---(overall)
+---------------------
+User Authentication:
+---------------------
+POST http://localhost:5000/api/auth/register - Register a new user
+
+POST http://localhost:5000/api/auth/login - User login
+
+GET http://localhost:5000/api/auth/me - Get current user profile (protected)
+
+Admin Authentication:
+-----------------------
+POST http://localhost:5000/api/admin/auth/login - Admin login
+
+GET http://localhost:5000/api/admin/auth/verify - Verify admin token
+
+POST http://localhost:5000/api/admin/auth/logout - Admin logout (client-side token removal)
+
+POST http://localhost:5000/api/admin/auth/setup - Create initial admin (setup only)
+
+User Management APIs
+---------------------
+User Operations:
+----------------
+GET http://localhost:5000/api/users/me - Get current user profile
+
+PUT http://localhost:5000/api/users/profile - Update user profile
+
+POST http://localhost:5000/api/users/upload-profile-picture - Upload profile picture
+
+GET http://localhost:5000/api/users/:id - Get user by ID
+
+GET http://localhost:5000/api/users - Get all users (admin only)
+
+Admin User Management
+-----------------------
+GET http://localhost:5000/api/admin/users - Get all users with search & pagination
+
+GET http://localhost:5000/api/admin/users/:id/details - Get detailed user information
+
+PUT http://localhost:5000/api/admin/users/:id/role - Update user role
+
+DELETE http://localhost:5000/api/admin/users/:id - Delete user
+
+PUT http://localhost:5000/api/admin/users/:id/profile - Update user profile (admin override)
+
+GET http://localhost:5000/api/admin/users-stats - Get user statistics
+
+Course Management APIs
+------------------------
+Public Course Operations
+-------------------------
+GET http://localhost:5000/api/courses - Get all courses
+
+GET http://localhost:5000/api/courses/:id - Get single course details
+
+POST http://localhost:5000/api/courses/purchase - Purchase course (with coupon support)
+
+Admin Course Operations
+------------------------
+GET http://localhost:5000/api/admin/courses - Get all courses (admin version)
+
+POST http://localhost:5000/api/admin/courses - Create new course
+
+GET http://localhost:5000/api/admin/courses/:id - Get single course (admin version)
+
+PUT http://localhost:5000/api/admin/courses/:id - Update course
+
+DELETE http://localhost:5000/api/admin/courses/:id - Delete course
+
+Course Content Management
+--------------------------
+GET http://localhost:5000/api/course-content/public/:courseId - Get public course contents
+
+GET http://localhost:5000/api/course-content/:courseId - Get course contents (protected)
+
+POST http://localhost:5000/api/course-content/upload - Upload course content (admin only)
+
+PUT http://localhost:5000/api/course-content/:id - Update course content
+
+DELETE http://localhost:5000/api/course-content/:id - Delete course content
+
+GET http://localhost:5000/api/courses/:id/content - Get course content for enrolled users
+
+Admin Course Content Operations
+-------------------------------
+GET http://localhost:5000/api/admin/courses/:id/content - Get course content (admin)
+
+POST http://localhost:5000/api/admin/courses/:id/content - Create course content (admin)
+
+DELETE http://localhost:5000/api/admin/courses/:courseId/content/:contentId - Delete course content (admin)
+
+Enrollment & Progress APIs
+--------------------------------
+Enrollment Operations:
+----------------------
+POST http://localhost:5000/api/enrollments - Create enrollment
+
+GET http://localhost:5000/api/enrollments/user/:userId - Get user enrollments
+
+PUT http://localhost:5000/api/enrollments/:id/progress - Update enrollment progress
+
+Admin Enrollment Management
+------------------------------
+GET http://localhost:5000/api/admin/enrollments - Get all enrollments with filters
+
+PUT http://localhost:5000/api/admin/enrollments/:id - Update enrollment status
+
+Progress Tracking
+------------------
+POST http://localhost:5000/api/course-content/:contentId/complete - Mark content as completed
+
+GET http://localhost:5000/api/course-content/progress/:courseId - Get user progress
+
+GET http://localhost:5000/api/course-content/check-enrollment/:courseId - Check enrollment status
+
+Payment & Coupon APIs
+Payment Operations
+POST http://localhost:5000/api/payments/create-order - Create payment order
+
+POST http://localhost:5000/api/payments/verify - Verify payment
+
+GET http://localhost:5000/api/payments/user - Get user payments
+
+GET http://localhost:5000/api/payments/all - Get all payments (admin only)
+
+POST http://localhost:5000/api/payments/refund - Initiate refund (admin only)
+
+Coupon Operations
+POST http://localhost:5000/api/coupons/create - Create coupon (admin)
+
+GET http://localhost:5000/api/coupons - Get all coupons
+
+POST http://localhost:5000/api/coupons/validate - Validate coupon
+
+POST http://localhost:5000/api/coupons/apply - Apply coupon
+
+Newsletter APIs
+Public Newsletter Operations
+POST http://localhost:5000/api/newsletter - Subscribe to newsletter
+
+POST http://localhost:5000/api/newsletter/unsubscribe - Unsubscribe from newsletter
+
+Admin Newsletter Operations
+GET http://localhost:5000/api/newsletter - Get all subscribers
+
+GET http://localhost:5000/api/newsletter/stats - Get subscriber statistics
+
+POST http://localhost:5000/api/newsletter/send - Send newsletter to all subscribers
+
+Dashboard & Reporting APIs
+Admin Dashboard
+GET http://localhost:5000/api/admin/dashboard - Get admin dashboard statistics
+
+Reports
+GET http://localhost:5000/api/reports/dashboard - Get dashboard stats (admin)
+
+GET http://localhost:5000/api/reports/enrollments - Get enrollment reports (admin)
+
+GET http://localhost:5000/api/reports/revenue - Get revenue reports (admin)
+
+GET http://localhost:5000/api/reports/users - Get user activity reports (admin)
+
+GET http://localhost:5000/api/reports/export - Export reports (admin)
+
+Video Management APIs
+GET http://localhost:5000/api/videos/course/:courseId - Get course videos
+
+POST http://localhost:5000/api/videos - Create video (admin only)
+
+PUT http://localhost:5000/api/videos/:id - Update video (admin only)
+
+DELETE http://localhost:5000/api/videos/:id - Delete video (admin only)
+
+Static File Serving
+GET http://localhost:5000/uploads/* - Serve uploaded files
+
+GET http://localhost:5000/api/uploads/* - Serve uploaded files via API
+
+GET http://localhost:5000/api/admin/courses/content/uploads/* - Serve course content uploads
+
+HTTP Methods Summary:
+POST: 18 endpoints (create/register/login operations)
+
+GET: 25 endpoints (retrieve data operations)
+
+PUT: 7 endpoints (update operations)
+
+DELETE: 5 endpoints (delete operations)
+
+
+---------------------------------------------------------------------------------------------------------
+Authentication & Profile
+POST http://localhost:5000/api/auth/register - Register account
+
+POST http://localhost:5000/api/auth/login - Login
+
+GET http://localhost:5000/api/auth/me - Get own profile
+
+PUT http://localhost:5000/api/users/profile - Update own profile
+
+POST http://localhost:5000/api/users/upload-profile-picture - Upload profile picture
+
+Course Access
+GET http://localhost:5000/api/courses - Browse all courses (public)
+
+GET http://localhost:5000/api/courses/:id - View course details
+
+POST http://localhost:5000/api/courses/purchase - Purchase courses
+
+GET http://localhost:5000/api/courses/:id/content - Access purchased course content
+
+GET http://localhost:5000/api/course-content/progress/:courseId - Get course progress
+
+Learning & Progress
+POST http://localhost:5000/api/course-content/:contentId/complete - Mark content as completed
+
+GET http://localhost:5000/api/course-content/progress/:courseId - Track learning progress
+
+GET http://localhost:5000/api/course-content/check-enrollment/:courseId - Check enrollment status
+
+PUT http://localhost:5000/api/enrollments/:id/progress - Update enrollment progress
+
+Payments & Coupons
+POST http://localhost:5000/api/payments/create-order - Create payment orders
+
+POST http://localhost:5000/api/payments/verify - Verify payments
+
+GET http://localhost:5000/api/payments/user - View own payment history
+
+POST http://localhost:5000/api/coupons/validate - Validate coupons
+
+POST http://localhost:5000/api/coupons/apply - Apply coupons
+
+Newsletter
+POST http://localhost:5000/api/newsletter - Subscribe to newsletter
+
+POST http://localhost:5000/api/newsletter/unsubscribe - Unsubscribe from newsletter

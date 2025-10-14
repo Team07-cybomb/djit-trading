@@ -158,6 +158,7 @@ const Footer = () => {
           </Col>
           <Col md={6}>
             <div className={styles.legalLinks}>
+              <Link to="/refund-policy">Refund Policy</Link>
               <Link to="/privacy">Privacy Policy</Link>
               <Link to="/terms">Terms & Conditions</Link>
             </div>

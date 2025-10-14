@@ -18,6 +18,7 @@ import SIPCalculator from "./tools/SIPCalculator";
 import SWPCalculator from "./tools/SWPCalculator";
 import ContactForm from "./pages/ContactForm";
 import Learning from "./pages/Learning";
+import RefundPolicy from "./pages/RefundPolicy";
 
 // Admin Components
 import AdminRoute from "./components/admin/AdminRoute";
@@ -65,6 +66,7 @@ function App() {
               <Route path="/about" element={<About />} />
               <Route path="/terms" element={<Terms />} />
               <Route path="/privacy" element={<Privacy />} />
+              <Route path="/refund-policy" element={<RefundPolicy />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/tools/fd-calculator" element={<FDCalculator />} />

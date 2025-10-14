@@ -52,7 +52,8 @@ const CourseContentModal = ({ show, onHide, selectedCourse, showAlert, onContent
       if (videoFile) formData.append("videoFile", videoFile);
       if (documentFile) formData.append("documentFile", documentFile);
 
-      const res = await api.post("/course-content/upload", formData, { headers: { "Content-Type": "multipart/form-data" }, timeout: 300000 });
+      const res = await api.post("/course-content/upload", formData, { 
+        headers: { "Content-Type": "multipart/form-data" }, timeout: 0 });
 
       showAlert("Content added successfully", "success");
       showLocalAlert("Content added successfully", "success");
@@ -88,7 +89,7 @@ const CourseContentModal = ({ show, onHide, selectedCourse, showAlert, onContent
     const file = e.target.files[0];
     if (!file) return;
     if (!file.type.startsWith("video/")) return showLocalAlert("Please select a valid video file", "danger");
-    if (file.size > 500 * 1024 * 1024) return showLocalAlert("Max video size is 500MB", "danger");
+    if (file.size > 10 * 1024 * 1024 * 1024) return showLocalAlert("Max video size is 10GB", "danger");
     setVideoFile(file);
     setContentFormData((p) => ({ ...p, videoUrl: "" }));
     showLocalAlert(`Video selected: ${file.name} (${(file.size / 1048576).toFixed(2)} MB)`, "info");
@@ -169,7 +170,7 @@ const CourseContentModal = ({ show, onHide, selectedCourse, showAlert, onContent
                 <Form.Group className="mb-3">
                   <Form.Label>Upload Video</Form.Label>
                   <Form.Control id="videoFileInput" type="file" accept="video/*" onChange={handleVideoFileChange} />
-                  <Form.Text>Max 500MB. MP4/AVI/MOV</Form.Text>
+                  <Form.Text>Max 10GB. MP4/AVI/MOV</Form.Text>
                   {videoFile && <div className="mt-2 d-flex gap-2"><Badge bg="info" className="flex-grow-1 text-truncate">{videoFile.name} ({(videoFile.size / 1048576).toFixed(2)} MB)</Badge><Button size="sm" variant="outline-danger" onClick={() => clearFile("video")}>×</Button></div>}
                 </Form.Group>
                 <Form.Group className="mb-3">

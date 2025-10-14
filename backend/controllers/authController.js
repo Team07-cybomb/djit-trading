@@ -57,6 +57,7 @@ exports.login = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(400).json({
+        success: false,
         message: 'Invalid credentials'
       });
     }
@@ -65,15 +66,19 @@ exports.login = async (req, res) => {
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(400).json({
+        success: false,
         message: 'Invalid credentials'
       });
     }
 
+    // Generate JWT token
     const token = generateToken(user._id);
 
-    res.json({
+    // ✅ Unified response for web + mobile
+    res.status(200).json({
       success: true,
-      token,
+      message: 'Login successful',
+      token, // mobile apps can use this directly
       user: {
         id: user._id,
         username: user.username,
@@ -84,11 +89,13 @@ exports.login = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({
+      success: false,
       message: 'Error in login',
       error: error.message
     });
   }
 };
+
 
 // Get current user
 exports.getMe = async (req, res) => {
