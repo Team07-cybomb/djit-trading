@@ -1,4 +1,3 @@
-// controllers/courseContentController.js
 const path = require("path");
 const fs = require("fs");
 const CourseContent = require("../models/CourseContent");
@@ -23,7 +22,7 @@ const uploadContent = async (req, res) => {
         videoFileData = {
           filename: file.filename,
           originalName: file.originalname,
-          path: `uploads/${file.filename}`, // FIX: Store relative path
+          path: `uploads/${file.filename}`,
           size: file.size,
           mimetype: file.mimetype,
           url: `/uploads/${file.filename}`,
@@ -34,7 +33,7 @@ const uploadContent = async (req, res) => {
         documentFileData = {
           filename: file.filename,
           originalName: file.originalname,
-          path: `uploads/${file.filename}`, // FIX: Store relative path
+          path: `uploads/${file.filename}`,
           size: file.size,
           mimetype: file.mimetype,
           url: `/uploads/${file.filename}`,
@@ -48,7 +47,7 @@ const uploadContent = async (req, res) => {
       description,
       type,
       duration,
-      order: order || 1,
+      order: order ? parseInt(order) : 1,
       isFree: isFree === "true" || isFree === true,
       videoUrl: videoUrl || "",
       documentUrl: documentUrl || "",
@@ -73,52 +72,80 @@ const getCourseContents = async (req, res) => {
 
     console.log(`Fetching course content for user ${userId}, course ${courseId}`);
 
-    // Check if user is enrolled in the course - using your enrollment model
+    // Check enrollment and payment
     const enrollment = await Enrollment.findOne({
       user: userId,
       course: courseId,
-      paymentStatus: 'completed' // Only allow access if payment is completed
+      paymentStatus: "completed",
     });
 
     if (!enrollment) {
-      return res.status(403).json({ 
-        success: false, 
-        message: "You are not enrolled in this course or payment is pending. Please enroll first." 
+      return res.status(403).json({
+        success: false,
+        message: "You are not enrolled in this course or payment is pending. Please enroll first.",
       });
     }
 
-    // Get course content with status active, sorted by order
-    const contents = await CourseContent.find({ 
+    const contents = await CourseContent.find({
       course: courseId,
-      status: 'active'
+      status: "active",
     }).sort({ order: 1 });
 
-    // Get user progress
+    // Check if files actually exist and update URLs
+    const contentsWithVerifiedUrls = await Promise.all(
+      contents.map(async (content) => {
+        const contentObj = content.toObject();
+        
+        // Verify video file exists
+        if (contentObj.videoFile?.path) {
+          const fullPath = path.join(__dirname, '..', contentObj.videoFile.path);
+          if (fs.existsSync(fullPath)) {
+            contentObj.videoFile.url = `/uploads/${contentObj.videoFile.filename}`;
+          } else {
+            console.warn(`Video file not found: ${fullPath}`);
+            contentObj.videoFile = null;
+          }
+        }
+
+        // Verify document file exists
+        if (contentObj.documentFile?.path) {
+          const fullPath = path.join(__dirname, '..', contentObj.documentFile.path);
+          if (fs.existsSync(fullPath)) {
+            contentObj.documentFile.url = `/uploads/${contentObj.documentFile.filename}`;
+          } else {
+            console.warn(`Document file not found: ${fullPath}`);
+            contentObj.documentFile = null;
+          }
+        }
+
+        return contentObj;
+      })
+    );
+
+    // Get user progress records for this course
     const userProgress = await Progress.find({
       user: userId,
       course: courseId,
     });
 
-    const completedContentIds = userProgress.map(progress => progress.content.toString());
+    const completedContentIds = userProgress.map((p) => p.content.toString());
 
-    // Calculate overall progress percentage
-    const progressPercentage = contents.length > 0 ? 
-      Math.round((userProgress.length / contents.length) * 100) : 0;
+    const progressPercentage = contents.length > 0 ? Math.round((userProgress.length / contents.length) * 100) : 0;
 
-    res.json({ 
-      success: true, 
-      content: contents,
+    res.json({
+      success: true,
+      content: contentsWithVerifiedUrls,
       enrollment: {
         enrollmentDate: enrollment.enrollmentDate,
         progress: enrollment.progress,
-        completed: enrollment.completed
+        completed: enrollment.completed,
       },
       progress: {
         completed: userProgress.length,
         total: contents.length,
-        completedContentIds: completedContentIds,
-        percentage: progressPercentage
-      }
+        completedContentIds,
+        percentage: progressPercentage,
+      },
     });
   } catch (error) {
     console.error("Error fetching course contents:", error);
@@ -131,11 +158,13 @@ const getPublicCourseContents = async (req, res) => {
   try {
     const { courseId } = req.params;
 
-    const contents = await CourseContent.find({ 
+    const contents = await CourseContent.find({
       course: courseId,
-      status: 'active',
-      isFree: true
-    }).sort({ order: 1 }).select('title description type duration order isFree');
+      status: "active",
+      isFree: true,
+    })
+      .sort({ order: 1 })
+      .select("title description type duration order isFree");
 
     res.json({ success: true, content: contents });
   } catch (error) {
@@ -178,7 +207,7 @@ const updateContent = async (req, res) => {
         updateData.videoFile = {
           filename: file.filename,
           originalName: file.originalname,
-          path: `uploads/${file.filename}`, // FIX: Store relative path
+          path: `uploads/${file.filename}`,
           size: file.size,
           mimetype: file.mimetype,
           url: `/uploads/${file.filename}`,
@@ -189,7 +218,7 @@ const updateContent = async (req, res) => {
         updateData.documentFile = {
           filename: file.filename,
           originalName: file.originalname,
-          path: `uploads/${file.filename}`, // FIX: Store relative path
+          path: `uploads/${file.filename}`,
           size: file.size,
           mimetype: file.mimetype,
           url: `/uploads/${file.filename}`,
@@ -197,7 +226,7 @@ const updateContent = async (req, res) => {
       }
     }
 
-    // Convert string booleans
+    // Convert string booleans & numeric order
     if (updateData.isFree) {
       updateData.isFree = updateData.isFree === "true" || updateData.isFree === true;
     }
@@ -205,11 +234,7 @@ const updateContent = async (req, res) => {
       updateData.order = parseInt(updateData.order);
     }
 
-    const updatedContent = await CourseContent.findByIdAndUpdate(
-      id,
-      updateData,
-      { new: true, runValidators: true }
-    );
+    const updatedContent = await CourseContent.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
 
     if (!updatedContent) {
       return res.status(404).json({
@@ -241,81 +266,67 @@ const markAsCompleted = async (req, res) => {
 
     console.log(`Marking content ${contentId} as completed for user ${userId}`);
 
-    // Check if content exists
     const content = await CourseContent.findById(contentId);
     if (!content) {
-      return res.status(404).json({
-        success: false,
-        message: "Content not found",
-      });
+      return res.status(404).json({ success: false, message: "Content not found" });
     }
 
-    // Check if user is enrolled in the course with completed payment
+    // Check enrollment
     const enrollment = await Enrollment.findOne({
       user: userId,
       course: content.course,
-      paymentStatus: 'completed'
+      paymentStatus: "completed",
     });
 
     if (!enrollment) {
-      return res.status(403).json({
-        success: false,
-        message: "You are not enrolled in this course or payment is pending",
-      });
+      return res.status(403).json({ success: false, message: "You are not enrolled in this course or payment is pending" });
     }
 
     // Check if already completed
-    const existingProgress = await Progress.findOne({
-      user: userId,
-      content: contentId,
-    });
+    const existingProgress = await Progress.findOne({ user: userId, content: contentId });
+
+    // Get counts for response
+    const totalProgressBefore = await Progress.countDocuments({ user: userId, course: content.course });
+    const totalContent = await CourseContent.countDocuments({ course: content.course, status: "active" });
 
     if (existingProgress) {
+      const progressPercentage = totalContent > 0 ? Math.round((totalProgressBefore / totalContent) * 100) : 0;
       return res.json({
         success: true,
         message: "Content already marked as completed",
-        progress: existingProgress,
+        progress: {
+          completed: totalProgressBefore,
+          total: totalContent,
+          percentage: progressPercentage,
+        },
+        enrollment: {
+          progress: enrollment.progress,
+          completed: enrollment.completed || false,
+        },
       });
     }
 
     // Create progress record
-    const progress = new Progress({
+    const progressDoc = new Progress({
       user: userId,
       course: content.course,
       content: contentId,
       completedAt: new Date(),
     });
 
-    await progress.save();
+    await progressDoc.save();
 
     // Get updated progress count
-    const totalProgress = await Progress.countDocuments({
-      user: userId,
-      course: content.course,
-    });
-
-    const totalContent = await CourseContent.countDocuments({
-      course: content.course,
-      status: 'active',
-    });
+    const totalProgress = await Progress.countDocuments({ user: userId, course: content.course });
 
     // Calculate new progress percentage
-    const progressPercentage = Math.round((totalProgress / totalContent) * 100);
+    const progressPercentage = totalContent > 0 ? Math.round((totalProgress / totalContent) * 100) : 0;
 
     // Update enrollment progress and check if course is completed
-    const updateData = {
-      progress: progressPercentage
-    };
+    const updateData = { progress: progressPercentage };
+    if (totalProgress === totalContent && totalContent > 0) updateData.completed = true;
 
-    // If all content is completed, mark course as completed
-    if (totalProgress === totalContent && totalContent > 0) {
-      updateData.completed = true;
-    }
-
-    await Enrollment.findOneAndUpdate(
-      { user: userId, course: content.course },
-      updateData
-    );
+    await Enrollment.findOneAndUpdate({ user: userId, course: content.course }, updateData);
 
     res.json({
       success: true,
@@ -327,8 +338,8 @@ const markAsCompleted = async (req, res) => {
       },
       enrollment: {
         progress: progressPercentage,
-        completed: updateData.completed || false
-      }
+        completed: updateData.completed || false,
+      },
     });
   } catch (error) {
     console.error("Error marking content complete:", error);
@@ -346,20 +357,11 @@ const getUserProgress = async (req, res) => {
     const { courseId } = req.params;
     const userId = req.user.id;
 
-    const progress = await Progress.find({
-      user: userId,
-      course: courseId,
-    }).populate("content", "title type order");
+    const progress = await Progress.find({ user: userId, course: courseId }).populate("content", "title type order");
 
-    const totalContent = await CourseContent.countDocuments({
-      course: courseId,
-      status: 'active',
-    });
+    const totalContent = await CourseContent.countDocuments({ course: courseId, status: "active" });
 
-    const enrollment = await Enrollment.findOne({
-      user: userId,
-      course: courseId,
-    });
+    const enrollment = await Enrollment.findOne({ user: userId, course: courseId });
 
     res.json({
       success: true,
@@ -367,18 +369,14 @@ const getUserProgress = async (req, res) => {
         completed: progress.length,
         total: totalContent,
         percentage: totalContent > 0 ? Math.round((progress.length / totalContent) * 100) : 0,
-        completedContents: progress.map(p => p.content._id),
+        completedContents: progress.map((p) => p.content._id),
         details: progress,
       },
       enrollment: enrollment,
     });
   } catch (error) {
     console.error("Error fetching user progress:", error);
-    res.status(500).json({
-      success: false,
-      message: "Error fetching user progress",
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: "Error fetching user progress", error: error.message });
   }
 };
 
@@ -388,28 +386,19 @@ const checkEnrollment = async (req, res) => {
     const { courseId } = req.params;
     const userId = req.user.id;
 
-    const enrollment = await Enrollment.findOne({
-      user: userId,
-      course: courseId,
-      paymentStatus: 'completed'
-    });
+    const enrollment = await Enrollment.findOne({ user: userId, course: courseId, paymentStatus: "completed" });
 
     res.json({
       success: true,
       enrolled: !!enrollment,
-      enrollment: enrollment
+      enrollment: enrollment,
     });
   } catch (error) {
     console.error("Error checking enrollment:", error);
-    res.status(500).json({
-      success: false,
-      message: "Error checking enrollment status",
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: "Error checking enrollment status", error: error.message });
   }
 };
 
-// Export all functions
 module.exports = {
   uploadContent,
   getCourseContents,
@@ -418,5 +407,5 @@ module.exports = {
   updateContent,
   markAsCompleted,
   getUserProgress,
-  checkEnrollment
+  checkEnrollment,
 };

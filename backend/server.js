@@ -22,12 +22,12 @@ app.use(express.urlencoded({ extended: true, limit: "20gb" }));
 
 // Static files - Serve uploads directory
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-app.use("/api/uploads", express.static(path.join(__dirname, "uploads")));
+// app.use("/api/uploads", express.static(path.join(__dirname, "uploads")));
 // Specific route for course content uploads
-app.use(
-  "/api/admin/courses/content/uploads",
-  express.static(path.join(__dirname, "uploads"))
-);
+// app.use(
+//   "/api/admin/courses/content/uploads",
+//   express.static(path.join(__dirname, "uploads"))
+// );
 
 // Load models first (important!)
 require("./models/User");
