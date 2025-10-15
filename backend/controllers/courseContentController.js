@@ -1,3 +1,4 @@
+// controllers/courseContentController.js
 const path = require("path");
 const fs = require("fs");
 const CourseContent = require("../models/CourseContent");
@@ -91,37 +92,6 @@ const getCourseContents = async (req, res) => {
       status: "active",
     }).sort({ order: 1 });
 
-    // Check if files actually exist and update URLs
-    const contentsWithVerifiedUrls = await Promise.all(
-      contents.map(async (content) => {
-        const contentObj = content.toObject();
-        
-        // Verify video file exists
-        if (contentObj.videoFile?.path) {
-          const fullPath = path.join(__dirname, '..', contentObj.videoFile.path);
-          if (fs.existsSync(fullPath)) {
-            contentObj.videoFile.url = `/uploads/${contentObj.videoFile.filename}`;
-          } else {
-            console.warn(`Video file not found: ${fullPath}`);
-            contentObj.videoFile = null;
-          }
-        }
-
-        // Verify document file exists
-        if (contentObj.documentFile?.path) {
-          const fullPath = path.join(__dirname, '..', contentObj.documentFile.path);
-          if (fs.existsSync(fullPath)) {
-            contentObj.documentFile.url = `/uploads/${contentObj.documentFile.filename}`;
-          } else {
-            console.warn(`Document file not found: ${fullPath}`);
-            contentObj.documentFile = null;
-          }
-        }
-
-        return contentObj;
-      })
-    );
-
     // Get user progress records for this course
     const userProgress = await Progress.find({
       user: userId,
@@ -134,7 +104,7 @@ const getCourseContents = async (req, res) => {
 
     res.json({
       success: true,
-      content: contentsWithVerifiedUrls,
+      content: contents,
       enrollment: {
         enrollmentDate: enrollment.enrollmentDate,
         progress: enrollment.progress,
@@ -150,6 +120,80 @@ const getCourseContents = async (req, res) => {
   } catch (error) {
     console.error("Error fetching course contents:", error);
     res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// Stream video content securely
+const streamVideo = async (req, res) => {
+  try {
+    const { contentId } = req.params;
+    const userId = req.user.id;
+
+    console.log(`Streaming video for content ${contentId}, user ${userId}`);
+
+    // Find the content
+    const content = await CourseContent.findById(contentId);
+    if (!content) {
+      return res.status(404).json({ success: false, message: "Content not found" });
+    }
+
+    // Check if user is enrolled in the course
+    const enrollment = await Enrollment.findOne({
+      user: userId,
+      course: content.course,
+      paymentStatus: "completed",
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not enrolled in this course or payment is pending",
+      });
+    }
+
+    // Check if content has a video file
+    if (!content.videoFile || !content.videoFile.path) {
+      return res.status(404).json({ success: false, message: "Video file not found" });
+    }
+
+    const videoPath = path.join(__dirname, '..', content.videoFile.path);
+    
+    // Check if file exists
+    if (!fs.existsSync(videoPath)) {
+      return res.status(404).json({ success: false, message: "Video file not found on server" });
+    }
+
+    const stat = fs.statSync(videoPath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+
+    if (range) {
+      // Handle range requests for video seeking
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const chunksize = (end - start) + 1;
+      const file = fs.createReadStream(videoPath, { start, end });
+      const head = {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunksize,
+        'Content-Type': content.videoFile.mimetype || 'video/mp4',
+      };
+      res.writeHead(206, head);
+      file.pipe(res);
+    } else {
+      // Stream entire file
+      const head = {
+        'Content-Length': fileSize,
+        'Content-Type': content.videoFile.mimetype || 'video/mp4',
+      };
+      res.writeHead(200, head);
+      fs.createReadStream(videoPath).pipe(res);
+    }
+  } catch (error) {
+    console.error("Error streaming video:", error);
+    res.status(500).json({ success: false, message: "Error streaming video" });
   }
 };
 
@@ -408,4 +452,5 @@ module.exports = {
   markAsCompleted,
   getUserProgress,
   checkEnrollment,
+  streamVideo,
 };

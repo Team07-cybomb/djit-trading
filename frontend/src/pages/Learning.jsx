@@ -31,6 +31,7 @@ const Learning = () => {
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [nextContent, setNextContent] = useState(null);
   const [completionInProgress, setCompletionInProgress] = useState(false);
+  const [videoBlobUrls, setVideoBlobUrls] = useState({});
 
   const videoRef = useRef(null);
   const progressIntervalRef = useRef(null);
@@ -51,19 +52,30 @@ const Learning = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId, isAuthenticated]);
 
-  // Clean up any interval on unmount
+  // Clean up blob URLs and intervals on unmount
   useEffect(() => {
     return () => {
+      // Clean up blob URLs to prevent memory leaks
+      Object.values(videoBlobUrls).forEach(blobUrl => {
+        if (blobUrl && blobUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(blobUrl);
+        }
+      });
+      
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
         progressIntervalRef.current = null;
       }
     };
-  }, []);
+  }, [videoBlobUrls]);
 
-  // When currentContent changes and it's a video, set up tracking.
+  // When currentContent changes and it's a video, set up tracking and fetch blob URL
   useEffect(() => {
     if (currentContent?.type === "video") {
+      // Fetch blob URL for local videos
+      if (currentContent.videoFile?.url && !isYouTubeUrl(currentContent.videoUrl)) {
+        fetchVideoBlobUrl(currentContent._id);
+      }
       const cleanup = setupVideoTracking();
       return cleanup;
     } else {
@@ -131,15 +143,38 @@ const Learning = () => {
     }
   };
 
+  const fetchVideoBlobUrl = async (contentId) => {
+    try {
+      // Check if we already have a blob URL for this content
+      if (videoBlobUrls[contentId]) {
+        return videoBlobUrls[contentId];
+      }
+
+      const response = await axios.get(`/api/course-content/video/${contentId}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        responseType: 'blob'
+      });
+
+      const blob = new Blob([response.data], { type: response.headers['content-type'] });
+      const blobUrl = URL.createObjectURL(blob);
+
+      setVideoBlobUrls(prev => ({
+        ...prev,
+        [contentId]: blobUrl
+      }));
+
+      return blobUrl;
+    } catch (error) {
+      console.error('Error fetching video blob:', error);
+      return null;
+    }
+  };
+
   const setupVideoTracking = () => {
-    // For YouTube embed we cannot access time updates from iframe here.
-    // We only track progress for <video> elements (local files or direct video URLs).
-    const isYouTube = isYouTubeUrl(getVideoUrl(currentContent));
+    const isYouTube = isYouTubeUrl(currentContent?.videoUrl);
     const video = videoRef.current;
 
     if (!video || isYouTube) {
-      // if it's an iframe (YouTube) we can't access playback details due to cross-origin.
-      // Instead mark progress as unknown and rely on server-side/manual 'Mark as Complete' or later implement YouTube player API.
       return () => {};
     }
 
@@ -215,61 +250,59 @@ const Learning = () => {
 
   const extractYouTubeId = (url) => {
     if (!url) return null;
-    // common patterns: watch?v=ID, youtu.be/ID, embed/ID
     const match = url.match(/[?&]v=([^&]+)/) || url.match(/youtu\.be\/([^?&/]+)/) || url.match(/embed\/([^?&/]+)/);
     return match ? match[1] : null;
   };
 
-  const getVideoUrl = (content) => {
+  const getVideoUrl = async (content) => {
     if (!content) return null;
 
-    // If content has a full videoUrl
-    if (content.videoUrl) {
-      if (isYouTubeUrl(content.videoUrl)) {
-        const videoId = extractYouTubeId(content.videoUrl);
-        if (videoId) {
-          return `https://www.youtube.com/embed/${videoId}`;
-        }
+    // YouTube videos - use embed URL
+    if (content.videoUrl && isYouTubeUrl(content.videoUrl)) {
+      const videoId = extractYouTubeId(content.videoUrl);
+      if (videoId) {
+        return `https://www.youtube.com/embed/${videoId}`;
       }
       return content.videoUrl;
     }
 
-    // If uploaded file exists - FIXED: Use absolute URL to your backend
+    // Local videos - use blob URL
     if (content.videoFile?.url) {
-      // Check if it's already an absolute URL
-      if (content.videoFile.url.startsWith('http')) {
-        return content.videoFile.url;
-      }
-      // For relative paths, construct the URL properly
-      const backendUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://your-production-domain.com'
-        : 'http://localhost:5000';
-      
-      // Remove any leading slash to avoid double slashes
-      const cleanPath = content.videoFile.url.startsWith('/') 
-        ? content.videoFile.url.substring(1) 
-        : content.videoFile.url;
-      
-      return `${backendUrl}/${cleanPath}`;
+      const blobUrl = await fetchVideoBlobUrl(content._id);
+      return blobUrl;
     }
 
     return null;
   };
 
+  const [currentVideoUrl, setCurrentVideoUrl] = useState(null);
+
+  // Effect to load video URL when currentContent changes
+  useEffect(() => {
+    const loadVideoUrl = async () => {
+      if (currentContent?.type === 'video') {
+        const url = await getVideoUrl(currentContent);
+        setCurrentVideoUrl(url);
+      } else {
+        setCurrentVideoUrl(null);
+      }
+    };
+
+    loadVideoUrl();
+  }, [currentContent]);
+
   const getDocumentUrl = (content) => {
     if (!content) return null;
     if (content.documentUrl) return content.documentUrl;
     if (content.documentFile?.url) {
-      // Check if it's already an absolute URL
+      // For documents, we can still use direct URLs or implement blob streaming if needed
       if (content.documentFile.url.startsWith('http')) {
         return content.documentFile.url;
       }
-      // For relative paths, construct the URL properly
       const backendUrl = process.env.NODE_ENV === 'production' 
         ? 'https://your-production-domain.com'
         : 'http://localhost:5000';
       
-      // Remove any leading slash to avoid double slashes
       const cleanPath = content.documentFile.url.startsWith('/') 
         ? content.documentFile.url.substring(1) 
         : content.documentFile.url;
@@ -332,16 +365,13 @@ const Learning = () => {
         { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
       );
 
-      // Server returns progress object (completed, total, percentage)
       const returnedProgress = res.data.progress || {};
-      // Update local progress state
       setProgress({
         completed: returnedProgress.completed ?? progress.completed,
         total: returnedProgress.total ?? progress.total,
         percentage: returnedProgress.percentage ?? progress.percentage,
       });
 
-      // Update enrollment if returned
       if (res.data.enrollment) {
         setEnrollment((prev) => ({
           ...prev,
@@ -349,7 +379,6 @@ const Learning = () => {
         }));
       }
 
-      // Safely update completedContents Set
       setCompletedContents((prev) => {
         const newSet = new Set(Array.from(prev));
         newSet.add(contentId);
@@ -368,7 +397,7 @@ const Learning = () => {
   const handleContentSelect = (content) => {
     setCurrentContent(content);
     // If switching to local video, reset its currentTime to 0 to restart view
-    if (content.type === "video" && videoRef.current && !isYouTubeUrl(getVideoUrl(content))) {
+    if (content.type === "video" && videoRef.current && !isYouTubeUrl(content.videoUrl)) {
       try {
         videoRef.current.currentTime = 0;
       } catch (e) {
@@ -560,15 +589,14 @@ const Learning = () => {
                   {/* Video Content */}
                   {currentContent.type === "video" && (
                     <div className={styles.videoContainer}>
-                      {getVideoUrl(currentContent) ? (
+                      {currentVideoUrl ? (
                         <div className={styles.videoWrapper}>
-                          {/* If it's a YouTube embed, render iframe to avoid CORS/fetch issues */}
-                          {isYouTubeUrl(getVideoUrl(currentContent)) ? (
+                          {isYouTubeUrl(currentContent.videoUrl) ? (
                             <div className={styles.youtubeContainer}>
                               <div className={styles.iframeWrapper}>
                                 <iframe
                                   title={currentContent.title}
-                                  src={getVideoUrl(currentContent)}
+                                  src={currentVideoUrl}
                                   frameBorder="0"
                                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                                   allowFullScreen
@@ -582,14 +610,12 @@ const Learning = () => {
                                 ref={videoRef}
                                 controls
                                 className={styles.videoPlayer}
-                                src={getVideoUrl(currentContent)}
+                                src={currentVideoUrl}
                                 controlsList="nodownload"
                                 preload="metadata"
                                 onError={(e) => {
                                   console.error("Video loading error:", e);
-                                  // Handle video loading errors
                                   e.target.style.display = 'none';
-                                  // Show error message to user
                                 }}
                               >
                                 Your browser does not support the video tag.
@@ -613,8 +639,7 @@ const Learning = () => {
                               </Alert>
                             )}
 
-                            {/* If it's a YouTube embed, show a helper to mark complete manually */}
-                            {isYouTubeUrl(getVideoUrl(currentContent)) && !completedContents.has(currentContent._id) && (
+                            {isYouTubeUrl(currentContent.videoUrl) && !completedContents.has(currentContent._id) && (
                               <div className={styles.youtubeNotice}>
                                 <small>
                                   This is a YouTube video. Playback is displayed via embed and cannot be tracked automatically.
