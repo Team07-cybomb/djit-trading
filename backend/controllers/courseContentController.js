@@ -1,6 +1,6 @@
-// controllers/courseContentController.js
 const path = require("path");
 const fs = require("fs");
+const mongoose = require("mongoose");
 const CourseContent = require("../models/CourseContent");
 const Enrollment = require("../models/Enrollment");
 const Progress = require("../models/Progress");
@@ -62,6 +62,255 @@ const uploadContent = async (req, res) => {
   } catch (error) {
     console.error("❌ Error uploading content:", error);
     res.status(500).json({ success: false, message: error.message || "Server error" });
+  }
+};
+
+// Get all uploaded content data (Admin only)
+const getAllContentData = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      search = "",
+      type = "",
+      course = "",
+      sortBy = "createdAt",
+      sortOrder = "desc"
+    } = req.query;
+
+    // Build filter object
+    const filter = {};
+    
+    if (search) {
+      filter.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } }
+      ];
+    }
+    
+    if (type) filter.type = type;
+    if (course) filter.course = course;
+
+    // Sort configuration
+    const sortConfig = {};
+    sortConfig[sortBy] = sortOrder === "desc" ? -1 : 1;
+
+    // Execute query with pagination
+    const contents = await CourseContent.find(filter)
+      .populate("course", "title category instructor")
+      .sort(sortConfig)
+      .limit(limit * 1)
+      .skip((page - 1) * limit)
+      .lean();
+
+    // Get total count for pagination
+    const total = await CourseContent.countDocuments(filter);
+
+    // Calculate storage statistics
+    const storageStats = await CourseContent.aggregate([
+      {
+        $group: {
+          _id: null,
+          totalVideos: { $sum: { $cond: [{ $ne: ["$videoFile", null] }, 1, 0] } },
+          totalDocuments: { $sum: { $cond: [{ $ne: ["$documentFile", null] }, 1, 0] } },
+          totalVideoSize: { $sum: { $ifNull: ["$videoFile.size", 0] } },
+          totalDocumentSize: { $sum: { $ifNull: ["$documentFile.size", 0] } },
+          totalContent: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Format file sizes for readability
+    const formatBytes = (bytes) => {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    };
+
+    const stats = storageStats[0] || {
+      totalVideos: 0,
+      totalDocuments: 0,
+      totalVideoSize: 0,
+      totalDocumentSize: 0,
+      totalContent: 0
+    };
+
+    res.json({
+      success: true,
+      contents,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(total / limit),
+        totalContents: total,
+        hasNext: page * limit < total,
+        hasPrev: page > 1
+      },
+      statistics: {
+        totalContent: stats.totalContent,
+        totalVideos: stats.totalVideos,
+        totalDocuments: stats.totalDocuments,
+        totalVideoSize: stats.totalVideoSize,
+        totalDocumentSize: stats.totalDocumentSize,
+        totalStorageUsed: stats.totalVideoSize + stats.totalDocumentSize,
+        formatted: {
+          totalVideoSize: formatBytes(stats.totalVideoSize),
+          totalDocumentSize: formatBytes(stats.totalDocumentSize),
+          totalStorageUsed: formatBytes(stats.totalVideoSize + stats.totalDocumentSize)
+        }
+      }
+    });
+  } catch (error) {
+    console.error("❌ Error fetching all content data:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// Get course-specific content data (Admin only)
+const getCourseContentData = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const {
+      page = 1,
+      limit = 10,
+      search = "",
+      type = "",
+      sortBy = "order",
+      sortOrder = "asc"
+    } = req.query;
+
+    // Validate courseId
+    if (!mongoose.Types.ObjectId.isValid(courseId)) {
+      return res.status(400).json({ success: false, message: "Invalid course ID" });
+    }
+
+    // Build filter object specific to the course
+    const filter = { course: new mongoose.Types.ObjectId(courseId) };
+    
+    if (search) {
+      filter.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } }
+      ];
+    }
+    
+    if (type) filter.type = type;
+
+    // Sort configuration
+    const sortConfig = {};
+    sortConfig[sortBy] = sortOrder === "desc" ? -1 : 1;
+
+    // Execute query with pagination
+    const contents = await CourseContent.find(filter)
+      .populate("course", "title category instructor")
+      .sort(sortConfig)
+      .limit(limit * 1)
+      .skip((page - 1) * limit)
+      .lean();
+
+    // Get total count for pagination
+    const total = await CourseContent.countDocuments(filter);
+
+    // Calculate storage statistics for this specific course
+    const storageStats = await CourseContent.aggregate([
+      { $match: { course: new mongoose.Types.ObjectId(courseId) } },
+      {
+        $group: {
+          _id: null,
+          totalVideos: { $sum: { $cond: [{ $ne: ["$videoFile", null] }, 1, 0] } },
+          totalDocuments: { $sum: { $cond: [{ $ne: ["$documentFile", null] }, 1, 0] } },
+          totalVideoSize: { $sum: { $ifNull: ["$videoFile.size", 0] } },
+          totalDocumentSize: { $sum: { $ifNull: ["$documentFile.size", 0] } },
+          totalContent: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Format file sizes for readability
+    const formatBytes = (bytes) => {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    };
+
+    const stats = storageStats[0] || {
+      totalVideos: 0,
+      totalDocuments: 0,
+      totalVideoSize: 0,
+      totalDocumentSize: 0,
+      totalContent: 0
+    };
+
+    res.json({
+      success: true,
+      contents,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(total / limit),
+        totalContents: total,
+        hasNext: page * limit < total,
+        hasPrev: page > 1
+      },
+      statistics: {
+        totalContent: stats.totalContent,
+        totalVideos: stats.totalVideos,
+        totalDocuments: stats.totalDocuments,
+        totalVideoSize: stats.totalVideoSize,
+        totalDocumentSize: stats.totalDocumentSize,
+        totalStorageUsed: stats.totalVideoSize + stats.totalDocumentSize,
+        formatted: {
+          totalVideoSize: formatBytes(stats.totalVideoSize),
+          totalDocumentSize: formatBytes(stats.totalDocumentSize),
+          totalStorageUsed: formatBytes(stats.totalVideoSize + stats.totalDocumentSize)
+        }
+      }
+    });
+  } catch (error) {
+    console.error("❌ Error fetching course content data:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// Get content by ID (Admin detailed view)
+const getContentById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const content = await CourseContent.findById(id)
+      .populate("course", "title category instructor duration level")
+      .lean();
+
+    if (!content) {
+      return res.status(404).json({ success: false, message: "Content not found" });
+    }
+
+    // Get usage statistics
+    const enrollmentCount = await Enrollment.countDocuments({ course: content.course._id });
+    const completionStats = await Progress.aggregate([
+      { $match: { content: content._id } },
+      {
+        $group: {
+          _id: null,
+          totalCompletions: { $sum: 1 },
+          averageCompletionTime: { $avg: { $subtract: ["$completedAt", "$createdAt"] } }
+        }
+      }
+    ]);
+
+    res.json({
+      success: true,
+      content,
+      analytics: {
+        enrollmentCount,
+        completionStats: completionStats[0] || { totalCompletions: 0, averageCompletionTime: 0 }
+      }
+    });
+  } catch (error) {
+    console.error("❌ Error fetching content by ID:", error);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
@@ -445,6 +694,9 @@ const checkEnrollment = async (req, res) => {
 
 module.exports = {
   uploadContent,
+  getAllContentData,
+  getCourseContentData,
+  getContentById,
   getCourseContents,
   getPublicCourseContents,
   deleteContent,
