@@ -1,4 +1,3 @@
-// controllers/courseContentController.js
 const path = require("path");
 const fs = require("fs");
 const CourseContent = require("../models/CourseContent");
@@ -23,7 +22,7 @@ const uploadContent = async (req, res) => {
         videoFileData = {
           filename: file.filename,
           originalName: file.originalname,
-          path: `uploads/${file.filename}`, // FIX: Store relative path
+          path: `uploads/${file.filename}`,
           size: file.size,
           mimetype: file.mimetype,
           url: `/uploads/${file.filename}`,
@@ -34,7 +33,7 @@ const uploadContent = async (req, res) => {
         documentFileData = {
           filename: file.filename,
           originalName: file.originalname,
-          path: `uploads/${file.filename}`, // FIX: Store relative path
+          path: `uploads/${file.filename}`,
           size: file.size,
           mimetype: file.mimetype,
           url: `/uploads/${file.filename}`,
@@ -48,7 +47,7 @@ const uploadContent = async (req, res) => {
       description,
       type,
       duration,
-      order: order || 1,
+      order: order ? parseInt(order) : 1,
       isFree: isFree === "true" || isFree === true,
       videoUrl: videoUrl || "",
       documentUrl: documentUrl || "",
@@ -65,6 +64,148 @@ const uploadContent = async (req, res) => {
   }
 };
 
+// Get all uploaded content data (Admin only)
+const getAllContentData = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      search = "",
+      type = "",
+      course = "",
+      sortBy = "createdAt",
+      sortOrder = "desc"
+    } = req.query;
+
+    // Build filter object
+    const filter = {};
+    
+    if (search) {
+      filter.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } }
+      ];
+    }
+    
+    if (type) filter.type = type;
+    if (course) filter.course = course;
+
+    // Sort configuration
+    const sortConfig = {};
+    sortConfig[sortBy] = sortOrder === "desc" ? -1 : 1;
+
+    // Execute query with pagination
+    const contents = await CourseContent.find(filter)
+      .populate("course", "title category instructor")
+      .sort(sortConfig)
+      .limit(limit * 1)
+      .skip((page - 1) * limit)
+      .lean();
+
+    // Get total count for pagination
+    const total = await CourseContent.countDocuments(filter);
+
+    // Calculate storage statistics
+    const storageStats = await CourseContent.aggregate([
+      {
+        $group: {
+          _id: null,
+          totalVideos: { $sum: { $cond: [{ $ne: ["$videoFile", null] }, 1, 0] } },
+          totalDocuments: { $sum: { $cond: [{ $ne: ["$documentFile", null] }, 1, 0] } },
+          totalVideoSize: { $sum: { $ifNull: ["$videoFile.size", 0] } },
+          totalDocumentSize: { $sum: { $ifNull: ["$documentFile.size", 0] } },
+          totalContent: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Format file sizes for readability
+    const formatBytes = (bytes) => {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    };
+
+    const stats = storageStats[0] || {
+      totalVideos: 0,
+      totalDocuments: 0,
+      totalVideoSize: 0,
+      totalDocumentSize: 0,
+      totalContent: 0
+    };
+
+    res.json({
+      success: true,
+      contents,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(total / limit),
+        totalContents: total,
+        hasNext: page * limit < total,
+        hasPrev: page > 1
+      },
+      statistics: {
+        totalContent: stats.totalContent,
+        totalVideos: stats.totalVideos,
+        totalDocuments: stats.totalDocuments,
+        totalVideoSize: stats.totalVideoSize,
+        totalDocumentSize: stats.totalDocumentSize,
+        totalStorageUsed: stats.totalVideoSize + stats.totalDocumentSize,
+        formatted: {
+          totalVideoSize: formatBytes(stats.totalVideoSize),
+          totalDocumentSize: formatBytes(stats.totalDocumentSize),
+          totalStorageUsed: formatBytes(stats.totalVideoSize + stats.totalDocumentSize)
+        }
+      }
+    });
+  } catch (error) {
+    console.error("❌ Error fetching all content data:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// Get content by ID (Admin detailed view)
+const getContentById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const content = await CourseContent.findById(id)
+      .populate("course", "title category instructor duration level")
+      .lean();
+
+    if (!content) {
+      return res.status(404).json({ success: false, message: "Content not found" });
+    }
+
+    // Get usage statistics
+    const enrollmentCount = await Enrollment.countDocuments({ course: content.course._id });
+    const completionStats = await Progress.aggregate([
+      { $match: { content: content._id } },
+      {
+        $group: {
+          _id: null,
+          totalCompletions: { $sum: 1 },
+          averageCompletionTime: { $avg: { $subtract: ["$completedAt", "$createdAt"] } }
+        }
+      }
+    ]);
+
+    res.json({
+      success: true,
+      content,
+      analytics: {
+        enrollmentCount,
+        completionStats: completionStats[0] || { totalCompletions: 0, averageCompletionTime: 0 }
+      }
+    });
+  } catch (error) {
+    console.error("❌ Error fetching content by ID:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
 // Get contents for enrolled users
 const getCourseContents = async (req, res) => {
   try {
@@ -73,56 +214,127 @@ const getCourseContents = async (req, res) => {
 
     console.log(`Fetching course content for user ${userId}, course ${courseId}`);
 
-    // Check if user is enrolled in the course - using your enrollment model
+    // Check enrollment and payment
     const enrollment = await Enrollment.findOne({
       user: userId,
       course: courseId,
-      paymentStatus: 'completed' // Only allow access if payment is completed
+      paymentStatus: "completed",
     });
 
     if (!enrollment) {
-      return res.status(403).json({ 
-        success: false, 
-        message: "You are not enrolled in this course or payment is pending. Please enroll first." 
+      return res.status(403).json({
+        success: false,
+        message: "You are not enrolled in this course or payment is pending. Please enroll first.",
       });
     }
 
-    // Get course content with status active, sorted by order
-    const contents = await CourseContent.find({ 
+    const contents = await CourseContent.find({
       course: courseId,
-      status: 'active'
+      status: "active",
     }).sort({ order: 1 });
 
-    // Get user progress
+    // Get user progress records for this course
     const userProgress = await Progress.find({
       user: userId,
       course: courseId,
     });
 
-    const completedContentIds = userProgress.map(progress => progress.content.toString());
+    const completedContentIds = userProgress.map((p) => p.content.toString());
 
-    // Calculate overall progress percentage
-    const progressPercentage = contents.length > 0 ? 
-      Math.round((userProgress.length / contents.length) * 100) : 0;
+    const progressPercentage = contents.length > 0 ? Math.round((userProgress.length / contents.length) * 100) : 0;
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       content: contents,
       enrollment: {
         enrollmentDate: enrollment.enrollmentDate,
         progress: enrollment.progress,
-        completed: enrollment.completed
+        completed: enrollment.completed,
       },
       progress: {
         completed: userProgress.length,
         total: contents.length,
-        completedContentIds: completedContentIds,
-        percentage: progressPercentage
-      }
+        completedContentIds,
+        percentage: progressPercentage,
+      },
     });
   } catch (error) {
     console.error("Error fetching course contents:", error);
     res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// Stream video content securely
+const streamVideo = async (req, res) => {
+  try {
+    const { contentId } = req.params;
+    const userId = req.user.id;
+
+    console.log(`Streaming video for content ${contentId}, user ${userId}`);
+
+    // Find the content
+    const content = await CourseContent.findById(contentId);
+    if (!content) {
+      return res.status(404).json({ success: false, message: "Content not found" });
+    }
+
+    // Check if user is enrolled in the course
+    const enrollment = await Enrollment.findOne({
+      user: userId,
+      course: content.course,
+      paymentStatus: "completed",
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not enrolled in this course or payment is pending",
+      });
+    }
+
+    // Check if content has a video file
+    if (!content.videoFile || !content.videoFile.path) {
+      return res.status(404).json({ success: false, message: "Video file not found" });
+    }
+
+    const videoPath = path.join(__dirname, '..', content.videoFile.path);
+    
+    // Check if file exists
+    if (!fs.existsSync(videoPath)) {
+      return res.status(404).json({ success: false, message: "Video file not found on server" });
+    }
+
+    const stat = fs.statSync(videoPath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+
+    if (range) {
+      // Handle range requests for video seeking
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const chunksize = (end - start) + 1;
+      const file = fs.createReadStream(videoPath, { start, end });
+      const head = {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunksize,
+        'Content-Type': content.videoFile.mimetype || 'video/mp4',
+      };
+      res.writeHead(206, head);
+      file.pipe(res);
+    } else {
+      // Stream entire file
+      const head = {
+        'Content-Length': fileSize,
+        'Content-Type': content.videoFile.mimetype || 'video/mp4',
+      };
+      res.writeHead(200, head);
+      fs.createReadStream(videoPath).pipe(res);
+    }
+  } catch (error) {
+    console.error("Error streaming video:", error);
+    res.status(500).json({ success: false, message: "Error streaming video" });
   }
 };
 
@@ -131,11 +343,13 @@ const getPublicCourseContents = async (req, res) => {
   try {
     const { courseId } = req.params;
 
-    const contents = await CourseContent.find({ 
+    const contents = await CourseContent.find({
       course: courseId,
-      status: 'active',
-      isFree: true
-    }).sort({ order: 1 }).select('title description type duration order isFree');
+      status: "active",
+      isFree: true,
+    })
+      .sort({ order: 1 })
+      .select("title description type duration order isFree");
 
     res.json({ success: true, content: contents });
   } catch (error) {
@@ -178,7 +392,7 @@ const updateContent = async (req, res) => {
         updateData.videoFile = {
           filename: file.filename,
           originalName: file.originalname,
-          path: `uploads/${file.filename}`, // FIX: Store relative path
+          path: `uploads/${file.filename}`,
           size: file.size,
           mimetype: file.mimetype,
           url: `/uploads/${file.filename}`,
@@ -189,7 +403,7 @@ const updateContent = async (req, res) => {
         updateData.documentFile = {
           filename: file.filename,
           originalName: file.originalname,
-          path: `uploads/${file.filename}`, // FIX: Store relative path
+          path: `uploads/${file.filename}`,
           size: file.size,
           mimetype: file.mimetype,
           url: `/uploads/${file.filename}`,
@@ -197,7 +411,7 @@ const updateContent = async (req, res) => {
       }
     }
 
-    // Convert string booleans
+    // Convert string booleans & numeric order
     if (updateData.isFree) {
       updateData.isFree = updateData.isFree === "true" || updateData.isFree === true;
     }
@@ -205,11 +419,7 @@ const updateContent = async (req, res) => {
       updateData.order = parseInt(updateData.order);
     }
 
-    const updatedContent = await CourseContent.findByIdAndUpdate(
-      id,
-      updateData,
-      { new: true, runValidators: true }
-    );
+    const updatedContent = await CourseContent.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
 
     if (!updatedContent) {
       return res.status(404).json({
@@ -241,81 +451,67 @@ const markAsCompleted = async (req, res) => {
 
     console.log(`Marking content ${contentId} as completed for user ${userId}`);
 
-    // Check if content exists
     const content = await CourseContent.findById(contentId);
     if (!content) {
-      return res.status(404).json({
-        success: false,
-        message: "Content not found",
-      });
+      return res.status(404).json({ success: false, message: "Content not found" });
     }
 
-    // Check if user is enrolled in the course with completed payment
+    // Check enrollment
     const enrollment = await Enrollment.findOne({
       user: userId,
       course: content.course,
-      paymentStatus: 'completed'
+      paymentStatus: "completed",
     });
 
     if (!enrollment) {
-      return res.status(403).json({
-        success: false,
-        message: "You are not enrolled in this course or payment is pending",
-      });
+      return res.status(403).json({ success: false, message: "You are not enrolled in this course or payment is pending" });
     }
 
     // Check if already completed
-    const existingProgress = await Progress.findOne({
-      user: userId,
-      content: contentId,
-    });
+    const existingProgress = await Progress.findOne({ user: userId, content: contentId });
+
+    // Get counts for response
+    const totalProgressBefore = await Progress.countDocuments({ user: userId, course: content.course });
+    const totalContent = await CourseContent.countDocuments({ course: content.course, status: "active" });
 
     if (existingProgress) {
+      const progressPercentage = totalContent > 0 ? Math.round((totalProgressBefore / totalContent) * 100) : 0;
       return res.json({
         success: true,
         message: "Content already marked as completed",
-        progress: existingProgress,
+        progress: {
+          completed: totalProgressBefore,
+          total: totalContent,
+          percentage: progressPercentage,
+        },
+        enrollment: {
+          progress: enrollment.progress,
+          completed: enrollment.completed || false,
+        },
       });
     }
 
     // Create progress record
-    const progress = new Progress({
+    const progressDoc = new Progress({
       user: userId,
       course: content.course,
       content: contentId,
       completedAt: new Date(),
     });
 
-    await progress.save();
+    await progressDoc.save();
 
     // Get updated progress count
-    const totalProgress = await Progress.countDocuments({
-      user: userId,
-      course: content.course,
-    });
-
-    const totalContent = await CourseContent.countDocuments({
-      course: content.course,
-      status: 'active',
-    });
+    const totalProgress = await Progress.countDocuments({ user: userId, course: content.course });
 
     // Calculate new progress percentage
-    const progressPercentage = Math.round((totalProgress / totalContent) * 100);
+    const progressPercentage = totalContent > 0 ? Math.round((totalProgress / totalContent) * 100) : 0;
 
     // Update enrollment progress and check if course is completed
-    const updateData = {
-      progress: progressPercentage
-    };
+    const updateData = { progress: progressPercentage };
+    if (totalProgress === totalContent && totalContent > 0) updateData.completed = true;
 
-    // If all content is completed, mark course as completed
-    if (totalProgress === totalContent && totalContent > 0) {
-      updateData.completed = true;
-    }
-
-    await Enrollment.findOneAndUpdate(
-      { user: userId, course: content.course },
-      updateData
-    );
+    await Enrollment.findOneAndUpdate({ user: userId, course: content.course }, updateData);
 
     res.json({
       success: true,
@@ -327,8 +523,8 @@ const markAsCompleted = async (req, res) => {
       },
       enrollment: {
         progress: progressPercentage,
-        completed: updateData.completed || false
-      }
+        completed: updateData.completed || false,
+      },
     });
   } catch (error) {
     console.error("Error marking content complete:", error);
@@ -346,20 +542,11 @@ const getUserProgress = async (req, res) => {
     const { courseId } = req.params;
     const userId = req.user.id;
 
-    const progress = await Progress.find({
-      user: userId,
-      course: courseId,
-    }).populate("content", "title type order");
+    const progress = await Progress.find({ user: userId, course: courseId }).populate("content", "title type order");
 
-    const totalContent = await CourseContent.countDocuments({
-      course: courseId,
-      status: 'active',
-    });
+    const totalContent = await CourseContent.countDocuments({ course: courseId, status: "active" });
 
-    const enrollment = await Enrollment.findOne({
-      user: userId,
-      course: courseId,
-    });
+    const enrollment = await Enrollment.findOne({ user: userId, course: courseId });
 
     res.json({
       success: true,
@@ -367,18 +554,14 @@ const getUserProgress = async (req, res) => {
         completed: progress.length,
         total: totalContent,
         percentage: totalContent > 0 ? Math.round((progress.length / totalContent) * 100) : 0,
-        completedContents: progress.map(p => p.content._id),
+        completedContents: progress.map((p) => p.content._id),
         details: progress,
       },
       enrollment: enrollment,
     });
   } catch (error) {
     console.error("Error fetching user progress:", error);
-    res.status(500).json({
-      success: false,
-      message: "Error fetching user progress",
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: "Error fetching user progress", error: error.message });
   }
 };
 
@@ -388,35 +571,29 @@ const checkEnrollment = async (req, res) => {
     const { courseId } = req.params;
     const userId = req.user.id;
 
-    const enrollment = await Enrollment.findOne({
-      user: userId,
-      course: courseId,
-      paymentStatus: 'completed'
-    });
+    const enrollment = await Enrollment.findOne({ user: userId, course: courseId, paymentStatus: "completed" });
 
     res.json({
       success: true,
       enrolled: !!enrollment,
-      enrollment: enrollment
+      enrollment: enrollment,
     });
   } catch (error) {
     console.error("Error checking enrollment:", error);
-    res.status(500).json({
-      success: false,
-      message: "Error checking enrollment status",
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: "Error checking enrollment status", error: error.message });
   }
 };
 
-// Export all functions
 module.exports = {
   uploadContent,
+  getAllContentData,
+  getContentById,
   getCourseContents,
   getPublicCourseContents,
   deleteContent,
   updateContent,
   markAsCompleted,
   getUserProgress,
-  checkEnrollment
+  checkEnrollment,
+  streamVideo,
 };

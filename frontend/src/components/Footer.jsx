@@ -11,6 +11,7 @@ import {
   Phone,
 } from "lucide-react";
 import styles from "./Footer.module.css";
+import logo from "../assets/logo-w.png";
 
 const Footer = () => {
   const [email, setEmail] = useState("");
@@ -40,7 +41,11 @@ const Footer = () => {
       <Container>
         <Row>
           <Col lg={4} md={6} className="mb-4">
-            <h5 className={styles.footerTitle}>TradeMaster Pro</h5>
+            <img
+                          src={logo}
+                          alt="TradeMaster Logo"
+                          className="brand-logo"
+                        />
             <p className={styles.footerText}>
               Master the markets with our comprehensive trading courses. Learn
               from industry experts and take your trading skills to the next
@@ -67,7 +72,7 @@ const Footer = () => {
                   href="mailto:support@trademasterpro.com"
                   className={styles.contactLink}
                 >
-                  support@trademasterpro.com
+                  support@djittrading.com
                 </a>
               </div>
               <div className={styles.contactItem}>
@@ -153,7 +158,7 @@ const Footer = () => {
         <Row>
           <Col md={6}>
             <p className={styles.copyright}>
-              © 2024 TradeMaster Pro. All rights reserved.
+              © 2025 Djit Trading. All rights reserved.
             </p>
           </Col>
           <Col md={6}>
