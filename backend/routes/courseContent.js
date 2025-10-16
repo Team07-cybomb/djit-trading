@@ -15,7 +15,6 @@ router.get("/public/:courseId", courseContentController.getPublicCourseContents)
 
 // Admin routes for content management
 router.get("/admin/all-content", adminAuth, courseContentController.getAllContentData);
-router.get("/admin/course-content/:courseId", adminAuth, courseContentController.getCourseContentData);
 router.get("/admin/content/:id", adminAuth, courseContentController.getContentById);
 
 // Protected routes
