@@ -51,7 +51,7 @@ const userSchema = new mongoose.Schema({
       country: String
     },
     tradingViewId: String,
-    vishcardId: String,
+   // vishcardId: String,
     tradingSegment: {
       type: String,
       enum: ['Stock', 'Options', 'Forex', '']
