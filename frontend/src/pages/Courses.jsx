@@ -10,6 +10,7 @@ import {
   InputGroup,
   Alert,
   Spinner,
+  Modal,
 } from "react-bootstrap";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -25,8 +26,11 @@ const Courses = () => {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [levelFilter, setLevelFilter] = useState("");
   const [showEnrollModal, setShowEnrollModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState(null);
+  const [courseDetails, setCourseDetails] = useState(null);
   const [enrolling, setEnrolling] = useState(false);
+  const [loadingDetails, setLoadingDetails] = useState(false);
   const [alert, setAlert] = useState({ show: false, message: "", type: "" });
 
   const { isAuthenticated, user } = useAuth();
@@ -49,6 +53,22 @@ const Courses = () => {
       showAlert("Error loading courses", "danger");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCourseDetails = async (courseId) => {
+    try {
+      setLoadingDetails(true);
+      const response = await axios.get(`/api/courses/${courseId}/details`);
+      setCourseDetails(response.data.course);
+    } catch (error) {
+      console.error("Error fetching course details:", error);
+      showAlert("Error loading course details", "danger");
+      // Fallback to basic course data if details endpoint fails
+      const basicCourse = courses.find(course => course._id === courseId);
+      setCourseDetails(basicCourse);
+    } finally {
+      setLoadingDetails(false);
     }
   };
 
@@ -87,6 +107,19 @@ const Courses = () => {
     setShowEnrollModal(true);
   };
 
+  const handleViewDetails = async (course) => {
+    setSelectedCourse(course);
+    setShowDetailsModal(true);
+    // Fetch complete course details when modal opens
+    await fetchCourseDetails(course._id);
+  };
+
+  const handleCloseDetailsModal = () => {
+    setShowDetailsModal(false);
+    setSelectedCourse(null);
+    setCourseDetails(null);
+  };
+
   const handleEnrollSuccess = () => {
     setShowEnrollModal(false);
     setSelectedCourse(null);
@@ -116,6 +149,300 @@ const Courses = () => {
       default:
         return "primary";
     }
+  };
+
+  // Course Details Modal Component with Icons
+  const CourseDetailsModal = ({ show, onHide, course, courseDetails, loadingDetails }) => {
+    // Use courseDetails if available, otherwise fallback to basic course data
+    const displayCourse = courseDetails || course;
+    
+    if (!displayCourse) return null;
+
+    return (
+      <Modal show={show} onHide={onHide} size="lg" centered scrollable>
+        <Modal.Header closeButton>
+          <Modal.Title>{displayCourse.title}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {loadingDetails ? (
+            <div className="text-center py-5">
+              <Spinner animation="border" variant="primary" />
+              <p className="mt-3">Loading course details...</p>
+            </div>
+          ) : (
+            <>
+              <Row>
+                <Col md={6}>
+                  <div className={styles.modalImage}>
+                    {displayCourse.thumbnail ? (
+                      <img 
+                        src={displayCourse.thumbnail} 
+                        alt={displayCourse.title} 
+                        className="img-fluid rounded"
+                      />
+                    ) : (
+                      <div className={`${styles.imagePlaceholder} ${styles.modalPlaceholder}`}>
+                        {displayCourse.title.charAt(0)}
+                      </div>
+                    )}
+                    <div className="mt-3">
+                      <Badge bg={getLevelVariant(displayCourse.level)} className="me-2">
+                        {displayCourse.level}
+                      </Badge>
+                      {displayCourse.featured && (
+                        <Badge bg="primary" className="me-2">
+                          Featured
+                        </Badge>
+                      )}
+                      {isCourseFree(displayCourse) && (
+                        <Badge bg="success">
+                          Free
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </Col>
+                <Col md={6}>
+                  <div className={styles.modalContent}>
+                    <h5 className="mb-3">Course Details</h5>
+                    
+                    {/* Icon-based Course Meta Information */}
+                    <div className={styles.iconMetaGrid}>
+                      <div className={styles.iconMetaItem}>
+                        <div className={styles.iconWrapper}>
+                          <span className={styles.metaIcon}>👨‍🏫</span>
+                        </div>
+                        <div className={styles.metaContent}>
+                          <div className={styles.metaLabel}>Instructor</div>
+                          <div className={styles.metaValue}>{displayCourse.instructor}</div>
+                        </div>
+                      </div>
+
+                      <div className={styles.iconMetaItem}>
+                        <div className={styles.iconWrapper}>
+                          <span className={styles.metaIcon}>📚</span>
+                        </div>
+                        <div className={styles.metaContent}>
+                          <div className={styles.metaLabel}>Category</div>
+                          <div className={styles.metaValue}>{displayCourse.category}</div>
+                        </div>
+                      </div>
+
+                      <div className={styles.iconMetaItem}>
+                        <div className={styles.iconWrapper}>
+                          <span className={styles.metaIcon}>⏱️</span>
+                        </div>
+                        <div className={styles.metaContent}>
+                          <div className={styles.metaLabel}>Duration</div>
+                          <div className={styles.metaValue}>{displayCourse.duration}</div>
+                        </div>
+                      </div>
+
+                      <div className={styles.iconMetaItem}>
+                        <div className={styles.iconWrapper}>
+                          <span className={styles.metaIcon}>📖</span>
+                        </div>
+                        <div className={styles.metaContent}>
+                          <div className={styles.metaLabel}>Lessons</div>
+                          <div className={styles.metaValue}>{displayCourse.lessons}</div>
+                        </div>
+                      </div>
+
+                      <div className={styles.iconMetaItem}>
+                        <div className={styles.iconWrapper}>
+                          <span className={styles.metaIcon}>🌐</span>
+                        </div>
+                        <div className={styles.metaContent}>
+                          <div className={styles.metaLabel}>Language</div>
+                          <div className={styles.metaValue}>{displayCourse.language || 'Tamil'}</div>
+                        </div>
+                      </div>
+
+                      <div className={styles.iconMetaItem}>
+                        <div className={styles.iconWrapper}>
+                          <span className={styles.metaIcon}>🚚</span>
+                        </div>
+                        <div className={styles.metaContent}>
+                          <div className={styles.metaLabel}>Delivery Time</div>
+                          <div className={styles.metaValue}>{displayCourse.deliveryTime || '48 Working Hours'}</div>
+                        </div>
+                      </div>
+
+                      <div className={styles.iconMetaItem}>
+                        <div className={styles.iconWrapper}>
+                          <span className={styles.metaIcon}>👥</span>
+                        </div>
+                        <div className={styles.metaContent}>
+                          <div className={styles.metaLabel}>Students Enrolled</div>
+                          <div className={styles.metaValue}>{displayCourse.studentsEnrolled}</div>
+                        </div>
+                      </div>
+
+                      <div className={styles.iconMetaItem}>
+                        <div className={styles.iconWrapper}>
+                          <span className={styles.metaIcon}>💰</span>
+                        </div>
+                        <div className={styles.metaContent}>
+                          <div className={styles.metaLabel}>Price</div>
+                          <div className={styles.metaValue}>
+                            {isCourseFree(displayCourse) ? (
+                              <span className="text-success fw-bold">Free</span>
+                            ) : (
+                              <>
+                                <span className="fw-bold">
+                                  ₹{displayCourse.discountedPrice || displayCourse.price}
+                                </span>
+                                {displayCourse.discountedPrice && (
+                                  <span className="text-muted text-decoration-line-through ms-2 small">
+                                    ₹{displayCourse.price}
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </Col>
+              </Row>
+
+              {/* Steps Section */}
+              {displayCourse.steps && displayCourse.steps.length > 0 && (
+                <div className="mt-4">
+                  <div className="d-flex align-items-center mb-3">
+                    <span className={`${styles.sectionIcon} me-2`}>🎯</span>
+                    <h6 className="mb-0">Course Structure</h6>
+                  </div>
+                  <div className={styles.stepsSection}>
+                    <div className="d-flex align-items-center mb-2">
+                      <Badge bg="primary" className="me-2">
+                        {displayCourse.steps.length} Steps
+                      </Badge>
+                    </div>
+                    <div className={styles.stepsList}>
+                      {displayCourse.steps.map((step, index) => (
+                        <div key={index} className={styles.stepItem}>
+                          <span className={styles.stepNumber}>{index + 1}</span>
+                          <span className={styles.stepText}>{step}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Course Contains Section */}
+              {displayCourse.courseContains && displayCourse.courseContains.length > 0 && (
+                <div className="mt-4">
+                  <div className="d-flex align-items-center mb-3">
+                    <span className={`${styles.sectionIcon} me-2`}>📦</span>
+                    <h6 className="mb-0">Course Modules</h6>
+                  </div>
+                  <div className={styles.featuresList}>
+                    {displayCourse.courseContains.map((item, index) => (
+                      <div key={index} className={styles.featureItem}>
+                        <span className={styles.featureIcon}>✓</span>
+                        <span>{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Indicators Section */}
+              {displayCourse.indicators && displayCourse.indicators.length > 0 && (
+                <div className="mt-4">
+                  <div className="d-flex align-items-center mb-3">
+                    <span className={`${styles.sectionIcon} me-2`}>📊</span>
+                    <h6 className="mb-0">Indicators You Will Get</h6>
+                  </div>
+                  <div className={styles.indicatorsList}>
+                    {displayCourse.indicators.map((indicator, index) => (
+                      <div key={index} className={styles.indicatorItem}>
+                        <div className={styles.indicatorHeader}>
+                          <span className={styles.indicatorIcon}>⚡</span>
+                          <strong className={styles.indicatorName}>{indicator.name}</strong>
+                        </div>
+                        <p className={styles.indicatorDescription}>{indicator.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Notes Section */}
+              {displayCourse.notes && displayCourse.notes.length > 0 && (
+                <div className="mt-4">
+                  <div className="d-flex align-items-center mb-3">
+                    <span className={`${styles.sectionIcon} me-2`}>📝</span>
+                    <h6 className="mb-0">Notes You Will Get</h6>
+                  </div>
+                  <div className={styles.notesList}>
+                    {displayCourse.notes.map((note, index) => (
+                      <div key={index} className={styles.noteItem}>
+                        <span className={styles.noteIcon}>📄</span>
+                        <span>{note}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Detailed Description */}
+              {displayCourse.detailedDescription && (
+                <div className="mt-4">
+                  <div className="d-flex align-items-center mb-3">
+                    <span className={`${styles.sectionIcon} me-2`}>ℹ️</span>
+                    <h6 className="mb-0">About This Course</h6>
+                  </div>
+                  <div className={styles.descriptionContent}>
+                    <p>{displayCourse.detailedDescription}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Disclaimer */}
+              {displayCourse.disclaimer && (
+                <div className="mt-4 p-3 bg-light rounded">
+                  <div className="d-flex align-items-center mb-2">
+                    <span className={`${styles.sectionIcon} me-2`}>⚠️</span>
+                    <h6 className="mb-0">Important Notice</h6>
+                  </div>
+                  <p className="mb-0 small">{displayCourse.disclaimer}</p>
+                </div>
+              )}
+            </>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={onHide}>
+            Close
+          </Button>
+          <Button 
+            variant={isCourseFree(displayCourse) ? "success" : "primary"}
+            onClick={() => {
+              onHide();
+              handleEnrollClick(displayCourse);
+            }}
+            disabled={loadingDetails}
+            className={styles.enrollButton}
+          >
+            {isCourseFree(displayCourse) ? (
+              <>
+                <span className="me-2">🎁</span>
+                Enroll Free
+              </>
+            ) : (
+              <>
+                <span className="me-2">🚀</span>
+                Enroll Now
+              </>
+            )}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+    );
   };
 
   return (
@@ -286,30 +613,38 @@ const Courses = () => {
                       </Card.Text>
                     </div>
 
+                    {/* Updated Course Meta with Icons */}
                     <div className={styles.courseMeta}>
-                      <div className={styles.instructor}>
-                        <span className={styles.metaLabel}>Instructor:</span>
-                        <span className={styles.metaValue}>
-                          {course.instructor}
-                        </span>
+                      <div className={styles.courseMetaItem}>
+                        <span className={styles.courseMetaIcon}>👨‍🏫</span>
+                        <div className={styles.courseMetaContent}>
+                          <div className={styles.courseMetaLabel}>Instructor</div>
+                          <div className={styles.courseMetaValue}>{course.instructor}</div>
+                        </div>
                       </div>
-                      <div className={styles.duration}>
-                        <span className={styles.metaLabel}>Duration:</span>
-                        <span className={styles.metaValue}>
-                          {course.duration}
-                        </span>
+                      
+                      <div className={styles.courseMetaItem}>
+                        <span className={styles.courseMetaIcon}>⏱️</span>
+                        <div className={styles.courseMetaContent}>
+                          <div className={styles.courseMetaLabel}>Duration</div>
+                          <div className={styles.courseMetaValue}>{course.duration}</div>
+                        </div>
                       </div>
-                      <div className={styles.lessons}>
-                        <span className={styles.metaLabel}>Lessons:</span>
-                        <span className={styles.metaValue}>
-                          {course.lessons}
-                        </span>
+                      
+                      <div className={styles.courseMetaItem}>
+                        <span className={styles.courseMetaIcon}>📖</span>
+                        <div className={styles.courseMetaContent}>
+                          <div className={styles.courseMetaLabel}>Lessons</div>
+                          <div className={styles.courseMetaValue}>{course.lessons}</div>
+                        </div>
                       </div>
-                      <div className={styles.students}>
-                        <span className={styles.metaLabel}>Students:</span>
-                        <span className={styles.metaValue}>
-                          {course.studentsEnrolled}
-                        </span>
+                      
+                      <div className={styles.courseMetaItem}>
+                        <span className={styles.courseMetaIcon}>👥</span>
+                        <div className={styles.courseMetaContent}>
+                          <div className={styles.courseMetaLabel}>Students</div>
+                          <div className={styles.courseMetaValue}>{course.studentsEnrolled}</div>
+                        </div>
                       </div>
                     </div>
 
@@ -317,22 +652,29 @@ const Courses = () => {
                       <div className={styles.priceSection}>
                         <div className={styles.coursePrice}>
                           {isCourseFree(course) ? (
-                            <span className={styles.freePrice}>Free</span>
+                            <div className={styles.freePriceContainer}>
+                              <span className={styles.freePriceIcon}>🎁</span>
+                              <span className={styles.freePrice}>Free</span>
+                            </div>
                           ) : (
                             <>
-                              <span className={styles.currentPrice}>
-                                ₹{course.discountedPrice || course.price}
-                              </span>
-                              {course.discountedPrice && (
-                                <span className={styles.originalPrice}>
-                                  ₹{course.price}
+                              <div className={styles.paidPriceContainer}>
+                                <span className={styles.priceIcon}>💰</span>
+                                <span className={styles.currentPrice}>
+                                  ₹{course.discountedPrice || course.price}
                                 </span>
-                              )}
+                                {course.discountedPrice && (
+                                  <span className={styles.originalPrice}>
+                                    ₹{course.price}
+                                  </span>
+                                )}
+                              </div>
                             </>
                           )}
                         </div>
                         {course.discountedPrice && !isCourseFree(course) && (
                           <div className={styles.discountBadge}>
+                            <span className={styles.discountIcon}>🔥</span>
                             Save{" "}
                             {Math.round(
                               (1 - course.discountedPrice / course.price) * 100
@@ -341,29 +683,47 @@ const Courses = () => {
                           </div>
                         )}
                       </div>
-                      <Button
-                        variant={isCourseFree(course) ? "success" : "primary"}
-                        className={styles.enrollBtn}
-                        onClick={() => handleEnrollClick(course)}
-                        disabled={
-                          enrolling && selectedCourse?._id === course._id
-                        }
-                      >
-                        {enrolling && selectedCourse?._id === course._id ? (
-                          <>
-                            <Spinner
-                              animation="border"
-                              size="sm"
-                              className="me-2"
-                            />
-                            Processing...
-                          </>
-                        ) : isCourseFree(course) ? (
-                          "Enroll Free"
-                        ) : (
-                          "Enroll Now"
-                        )}
-                      </Button>
+                      
+                      {/* Updated Button Section */}
+                      <div className={styles.buttonGroup}>
+                        <Button
+                          variant="outline-primary"
+                          className={styles.viewDetailsBtn}
+                          onClick={() => handleViewDetails(course)}
+                        >
+                          <span className={styles.buttonIcon}>👁️</span>
+                          View Details
+                        </Button>
+                        <Button
+                          variant={isCourseFree(course) ? "success" : "primary"}
+                          className={styles.enrollBtn}
+                          onClick={() => handleEnrollClick(course)}
+                          disabled={
+                            enrolling && selectedCourse?._id === course._id
+                          }
+                        >
+                          {enrolling && selectedCourse?._id === course._id ? (
+                            <>
+                              <Spinner
+                                animation="border"
+                                size="sm"
+                                className="me-2"
+                              />
+                              Processing...
+                            </>
+                          ) : isCourseFree(course) ? (
+                            <>
+                              <span className={styles.buttonIcon}>🎁</span>
+                              Enroll Free
+                            </>
+                          ) : (
+                            <>
+                              <span className={styles.buttonIcon}>🚀</span>
+                              Enroll Now
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     </div>
                   </Card.Body>
                 </Card>
@@ -396,6 +756,15 @@ const Courses = () => {
           course={selectedCourse}
           onEnrollSuccess={handleEnrollSuccess}
           showAlert={showAlert}
+        />
+
+        {/* Course Details Modal */}
+        <CourseDetailsModal
+          show={showDetailsModal}
+          onHide={handleCloseDetailsModal}
+          course={selectedCourse}
+          courseDetails={courseDetails}
+          loadingDetails={loadingDetails}
         />
       </Container>
     </div>
