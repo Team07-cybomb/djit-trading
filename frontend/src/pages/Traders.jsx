@@ -28,7 +28,7 @@ const Traders = () => {
       country: ''
     },
     tradingViewId: '',
-    vishcardId: '',
+   // vishcardId: '',
     tradingSegment: '',
     discordId: '',
     profilePicture: {
@@ -91,7 +91,7 @@ const Traders = () => {
               street: '', city: '', state: '', zipCode: '', country: ''
             },
             tradingViewId: userProfile.profile.tradingViewId || '',
-            vishcardId: userProfile.profile.vishcardId || '',
+           // vishcardId: userProfile.profile.vishcardId || '',
             tradingSegment: userProfile.profile.tradingSegment || '',
             discordId: userProfile.profile.discordId || '',
             profilePicture: userProfile.profile.profilePicture || {
@@ -661,7 +661,7 @@ const Traders = () => {
                       />
                     </Form.Group>
 
-                    <Form.Group className="mb-3">
+                    {/* <Form.Group className="mb-3">
                       <Form.Label>Vishcard ID</Form.Label>
                       <Form.Control
                         type="text"
@@ -670,7 +670,7 @@ const Traders = () => {
                         onChange={handleInputChange}
                         placeholder="Enter your Vishcard ID"
                       />
-                    </Form.Group>
+                    </Form.Group> */}
 
                     <Form.Group className="mb-3">
                       <Form.Label>Trading Segment</Form.Label>
@@ -860,10 +860,10 @@ const Traders = () => {
                           <strong>TradingView ID:</strong>
                           <div>{profile?.profile?.tradingViewId || 'Not provided'}</div>
                         </div>
-                        <div className="mb-3">
+                        {/* <div className="mb-3">
                           <strong>Vishcard ID:</strong>
                           <div>{profile?.profile?.vishcardId || 'Not provided'}</div>
-                        </div>
+                        </div> */}
                         <div className="mb-3">
                           <strong>Discord ID:</strong>
                           <div>{profile?.profile?.discordId || 'Not provided'}</div>

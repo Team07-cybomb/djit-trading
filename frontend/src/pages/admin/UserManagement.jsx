@@ -157,7 +157,7 @@ const UserManagement = () => {
         'Alternate Phone': user.profile?.phone2 || '',
         'Birthday': user.profile?.birthday ? new Date(user.profile.birthday).toLocaleDateString() : '',
         'TradingView ID': user.profile?.tradingViewId || '',
-        'Vishcard ID': user.profile?.vishcardId || '',
+        //'Vishcard ID': user.profile?.vishcardId || '',
         'Discord ID': user.profile?.discordId || '',
         'Trading Segment': user.profile?.tradingSegment || '',
         'Badge': user.profile?.badge || '',
@@ -187,7 +187,7 @@ const UserManagement = () => {
         { wch: 15 }, // Alternate Phone
         { wch: 12 }, // Birthday
         { wch: 15 }, // TradingView ID
-        { wch: 15 }, // Vishcard ID
+        //{ wch: 15 }, // Vishcard ID
         { wch: 15 }, // Discord ID
         { wch: 15 }, // Trading Segment
         { wch: 12 }, // Badge
@@ -720,10 +720,10 @@ const UserManagement = () => {
                         <td><strong>TradingView ID:</strong></td>
                         <td>{userDetails.profile?.tradingViewId || 'Not provided'}</td>
                       </tr>
-                      <tr>
+                      {/* <tr>
                         <td><strong>Vishcard ID:</strong></td>
                         <td>{userDetails.profile?.vishcardId || 'Not provided'}</td>
-                      </tr>
+                      </tr> */}
                       <tr>
                         <td><strong>Discord ID:</strong></td>
                         <td>{userDetails.profile?.discordId || 'Not provided'}</td>
