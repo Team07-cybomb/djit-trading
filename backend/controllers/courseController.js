@@ -51,7 +51,20 @@ exports.getCourse = async (req, res) => {
 // =============================
 exports.createCourse = async (req, res) => {
   try {
-    const course = await Course.create(req.body);
+    // Set default values for new fields
+    const courseData = {
+      ...req.body,
+      steps: req.body.steps || [],
+      courseContains: req.body.courseContains || [],
+      indicators: req.body.indicators || [],
+      notes: req.body.notes || [],
+      detailedDescription: req.body.detailedDescription || '',
+      deliveryTime: req.body.deliveryTime || '48 Working Hours',
+      language: req.body.language || 'Tamil',
+      disclaimer: req.body.disclaimer || 'This course is offered solely for educational purposes and is intended for beginners who wish to learn about trading indicators. Participation in this course is voluntary. By purchasing, you acknowledge and agree that no refunds will be granted once access is provided. Trading involves inherent risk and may not be suitable for everyone.'
+    };
+
+    const course = await Course.create(courseData);
     res.status(201).json({
       success: true,
       course
@@ -69,9 +82,28 @@ exports.createCourse = async (req, res) => {
 // =============================
 exports.updateCourse = async (req, res) => {
   try {
+    // Clean up the data - remove empty strings from arrays
+    const cleanData = { ...req.body };
+    
+    // Filter out empty strings from arrays
+    if (cleanData.steps) {
+      cleanData.steps = cleanData.steps.filter(step => step.trim() !== '');
+    }
+    if (cleanData.courseContains) {
+      cleanData.courseContains = cleanData.courseContains.filter(item => item.trim() !== '');
+    }
+    if (cleanData.notes) {
+      cleanData.notes = cleanData.notes.filter(note => note.trim() !== '');
+    }
+    if (cleanData.indicators) {
+      cleanData.indicators = cleanData.indicators.filter(indicator => 
+        indicator.name.trim() !== '' || indicator.description.trim() !== ''
+      );
+    }
+
     const course = await Course.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      cleanData,
       { new: true, runValidators: true }
     );
 
@@ -86,6 +118,76 @@ exports.updateCourse = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       message: 'Error updating course',
+      error: error.message
+    });
+  }
+};
+
+// =============================
+// Update course details specifically (Admin only)
+// =============================
+exports.updateCourseDetails = async (req, res) => {
+  try {
+    const {
+      steps,
+      courseContains,
+      indicators,
+      notes,
+      detailedDescription,
+      deliveryTime,
+      language,
+      disclaimer
+    } = req.body;
+
+    // Clean up the data - remove empty strings from arrays
+    const cleanData = {};
+    
+    if (steps) {
+      cleanData.steps = steps.filter(step => step.trim() !== '');
+    }
+    if (courseContains) {
+      cleanData.courseContains = courseContains.filter(item => item.trim() !== '');
+    }
+    if (notes) {
+      cleanData.notes = notes.filter(note => note.trim() !== '');
+    }
+    if (indicators) {
+      cleanData.indicators = indicators.filter(indicator => 
+        indicator.name.trim() !== '' || indicator.description.trim() !== ''
+      );
+    }
+    if (detailedDescription !== undefined) {
+      cleanData.detailedDescription = detailedDescription;
+    }
+    if (deliveryTime !== undefined) {
+      cleanData.deliveryTime = deliveryTime;
+    }
+    if (language !== undefined) {
+      cleanData.language = language;
+    }
+    if (disclaimer !== undefined) {
+      cleanData.disclaimer = disclaimer;
+    }
+
+    const course = await Course.findByIdAndUpdate(
+      req.params.id,
+      cleanData,
+      { new: true, runValidators: true }
+    );
+
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Course details updated successfully',
+      course
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error updating course details',
       error: error.message
     });
   }
@@ -177,6 +279,140 @@ exports.purchaseCourse = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error purchasing course',
+      error: error.message
+    });
+  }
+};
+
+// =============================
+// Get course with full details
+// =============================
+exports.getCourseWithDetails = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.id);
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    // Return course with all details
+    res.json({
+      success: true,
+      course: {
+        ...course.toObject(),
+        // Ensure arrays are always returned (even if empty)
+        steps: course.steps || [],
+        courseContains: course.courseContains || [],
+        indicators: course.indicators || [],
+        notes: course.notes || [],
+        detailedDescription: course.detailedDescription || '',
+        deliveryTime: course.deliveryTime || '48 Working Hours',
+        language: course.language || 'Tamil',
+        disclaimer: course.disclaimer || 'This course is offered solely for educational purposes and is intended for beginners who wish to learn about trading indicators. Participation in this course is voluntary. By purchasing, you acknowledge and agree that no refunds will be granted once access is provided. Trading involves inherent risk and may not be suitable for everyone.'
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: 'Error fetching course details',
+      error: error.message
+    });
+  }
+};
+
+// =============================
+// Add specific course content item
+// =============================
+exports.addCourseContent = async (req, res) => {
+  try {
+    const { type, content } = req.body; // type: 'step', 'courseContains', 'indicator', 'note'
+    
+    const course = await Course.findById(req.params.id);
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    let updateField = {};
+    
+    switch (type) {
+      case 'step':
+        updateField = { $push: { steps: content } };
+        break;
+      case 'courseContains':
+        updateField = { $push: { courseContains: content } };
+        break;
+      case 'note':
+        updateField = { $push: { notes: content } };
+        break;
+      case 'indicator':
+        updateField = { $push: { indicators: content } };
+        break;
+      default:
+        return res.status(400).json({ message: 'Invalid content type' });
+    }
+
+    const updatedCourse = await Course.findByIdAndUpdate(
+      req.params.id,
+      updateField,
+      { new: true }
+    );
+
+    res.json({
+      success: true,
+      message: 'Content added successfully',
+      course: updatedCourse
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: 'Error adding course content',
+      error: error.message
+    });
+  }
+};
+
+// =============================
+// Remove specific course content item
+// =============================
+exports.removeCourseContent = async (req, res) => {
+  try {
+    const { type, index } = req.body; // type: 'step', 'courseContains', 'indicator', 'note'
+    
+    const course = await Course.findById(req.params.id);
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    let updateField = {};
+    
+    switch (type) {
+      case 'step':
+        updateField = { $pull: { steps: course.steps[index] } };
+        break;
+      case 'courseContains':
+        updateField = { $pull: { courseContains: course.courseContains[index] } };
+        break;
+      case 'note':
+        updateField = { $pull: { notes: course.notes[index] } };
+        break;
+      case 'indicator':
+        updateField = { $pull: { indicators: course.indicators[index] } };
+        break;
+      default:
+        return res.status(400).json({ message: 'Invalid content type' });
+    }
+
+    const updatedCourse = await Course.findByIdAndUpdate(
+      req.params.id,
+      updateField,
+      { new: true }
+    );
+
+    res.json({
+      success: true,
+      message: 'Content removed successfully',
+      course: updatedCourse
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: 'Error removing course content',
       error: error.message
     });
   }

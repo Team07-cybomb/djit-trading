@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Row, Col, Card, Button, Table, Badge, Alert } from 'react-bootstrap'
+import { Row, Col, Card, Button, Table, Badge, Alert, Modal, Form } from 'react-bootstrap'
 import axios from 'axios'
 import CourseModal from './CourseModal'
 import CourseContentModal from './CourseContentModal'
@@ -8,6 +8,7 @@ const CourseManagement = () => {
   const [courses, setCourses] = useState([])
   const [showModal, setShowModal] = useState(false)
   const [showContentModal, setShowContentModal] = useState(false)
+  const [showDetailsModal, setShowDetailsModal] = useState(false)
   const [editingCourse, setEditingCourse] = useState(null)
   const [selectedCourse, setSelectedCourse] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -74,6 +75,11 @@ const CourseManagement = () => {
     setShowContentModal(true)
   }
 
+  const handleShowDetailsModal = (course) => {
+    setSelectedCourse(course)
+    setShowDetailsModal(true)
+  }
+
   const handleCloseModal = () => {
     setShowModal(false)
     setEditingCourse(null)
@@ -81,6 +87,11 @@ const CourseManagement = () => {
 
   const handleCloseContentModal = () => {
     setShowContentModal(false)
+    setSelectedCourse(null)
+  }
+
+  const handleCloseDetailsModal = () => {
+    setShowDetailsModal(false)
     setSelectedCourse(null)
   }
 
@@ -108,6 +119,290 @@ const CourseManagement = () => {
       case 'Advanced': return 'danger'
       default: return 'secondary'
     }
+  }
+
+  // Course Details Modal Component
+  const CourseDetailsModal = ({ show, onHide, course }) => {
+    const [localCourse, setLocalCourse] = useState(course || {})
+    
+    useEffect(() => {
+      setLocalCourse(course || {})
+    }, [course])
+
+    const handleInputChange = (field, value) => {
+      setLocalCourse(prev => ({
+        ...prev,
+        [field]: value
+      }))
+    }
+
+    const handleArrayChange = (field, index, value) => {
+      setLocalCourse(prev => ({
+        ...prev,
+        [field]: prev[field]?.map((item, i) => i === index ? value : item) || []
+      }))
+    }
+
+    const addArrayItem = (field) => {
+      setLocalCourse(prev => ({
+        ...prev,
+        [field]: [...(prev[field] || []), '']
+      }))
+    }
+
+    const removeArrayItem = (field, index) => {
+      setLocalCourse(prev => ({
+        ...prev,
+        [field]: prev[field]?.filter((_, i) => i !== index) || []
+      }))
+    }
+
+    const handleIndicatorChange = (index, field, value) => {
+      setLocalCourse(prev => ({
+        ...prev,
+        indicators: prev.indicators?.map((indicator, i) => 
+          i === index ? { ...indicator, [field]: value } : indicator
+        ) || []
+      }))
+    }
+
+    const addIndicator = () => {
+      setLocalCourse(prev => ({
+        ...prev,
+        indicators: [...(prev.indicators || []), { name: '', description: '' }]
+      }))
+    }
+
+    const removeIndicator = (index) => {
+      setLocalCourse(prev => ({
+        ...prev,
+        indicators: prev.indicators?.filter((_, i) => i !== index) || []
+      }))
+    }
+
+    const handleSave = async () => {
+      try {
+        await api.put(`/admin/courses/${course._id}`, localCourse)
+        showAlert('Course details updated successfully', 'success')
+        fetchCourses()
+        onHide()
+      } catch (error) {
+        console.error('Error updating course details:', error)
+        showAlert('Error updating course details', 'danger')
+      }
+    }
+
+    if (!course) return null
+
+    return (
+      <Modal show={show} onHide={onHide} size="lg" centered scrollable>
+        <Modal.Header closeButton>
+          <Modal.Title>Course Details - {course.title}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form>
+            {/* Steps */}
+            <Form.Group className="mb-3">
+              <Form.Label>
+                <strong>Steps ({localCourse.steps?.length || 0})</strong>
+              </Form.Label>
+              {localCourse.steps?.map((step, index) => (
+                <div key={index} className="d-flex mb-2">
+                  <Form.Control
+                    type="text"
+                    value={step}
+                    onChange={(e) => handleArrayChange('steps', index, e.target.value)}
+                    placeholder={`Step ${index + 1}`}
+                  />
+                  <Button
+                    variant="outline-danger"
+                    size="sm"
+                    className="ms-2"
+                    onClick={() => removeArrayItem('steps', index)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+              <Button
+                variant="outline-primary"
+                size="sm"
+                onClick={() => addArrayItem('steps')}
+              >
+                + Add Step
+              </Button>
+            </Form.Group>
+
+            {/* Course Contains */}
+            <Form.Group className="mb-3">
+              <Form.Label>
+                <strong>Course Modules</strong>
+              </Form.Label>
+              {localCourse.courseContains?.map((item, index) => (
+                <div key={index} className="d-flex mb-2">
+                  <Form.Control
+                    type="text"
+                    value={item}
+                    onChange={(e) => handleArrayChange('courseContains', index, e.target.value)}
+                    placeholder={`Course content ${index + 1}`}
+                  />
+                  <Button
+                    variant="outline-danger"
+                    size="sm"
+                    className="ms-2"
+                    onClick={() => removeArrayItem('courseContains', index)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+              <Button
+                variant="outline-primary"
+                size="sm"
+                onClick={() => addArrayItem('courseContains')}
+              >
+                + Add Course Content
+              </Button>
+            </Form.Group>
+
+            {/* Indicators */}
+            <Form.Group className="mb-3">
+              <Form.Label>
+                <strong>Indicators</strong>
+              </Form.Label>
+              {localCourse.indicators?.map((indicator, index) => (
+                <div key={index} className="border p-3 mb-3">
+                  <div className="d-flex mb-2">
+                    <Form.Control
+                      type="text"
+                      value={indicator.name}
+                      onChange={(e) => handleIndicatorChange(index, 'name', e.target.value)}
+                      placeholder="Indicator name"
+                    />
+                    <Button
+                      variant="outline-danger"
+                      size="sm"
+                      className="ms-2"
+                      onClick={() => removeIndicator(index)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                  <Form.Control
+                    as="textarea"
+                    rows={2}
+                    value={indicator.description}
+                    onChange={(e) => handleIndicatorChange(index, 'description', e.target.value)}
+                    placeholder="Indicator description"
+                  />
+                </div>
+              ))}
+              <Button
+                variant="outline-primary"
+                size="sm"
+                onClick={addIndicator}
+              >
+                + Add Indicator
+              </Button>
+            </Form.Group>
+
+            {/* Notes */}
+            <Form.Group className="mb-3">
+              <Form.Label>
+                <strong>Notes</strong>
+              </Form.Label>
+              {localCourse.notes?.map((note, index) => (
+                <div key={index} className="d-flex mb-2">
+                  <Form.Control
+                    type="text"
+                    value={note}
+                    onChange={(e) => handleArrayChange('notes', index, e.target.value)}
+                    placeholder={`Note ${index + 1}`}
+                  />
+                  <Button
+                    variant="outline-danger"
+                    size="sm"
+                    className="ms-2"
+                    onClick={() => removeArrayItem('notes', index)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+              <Button
+                variant="outline-primary"
+                size="sm"
+                onClick={() => addArrayItem('notes')}
+              >
+                + Add Note
+              </Button>
+            </Form.Group>
+
+            {/* Detailed Description */}
+            <Form.Group className="mb-3">
+              <Form.Label>
+                <strong>Detailed Description</strong>
+              </Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={4}
+                value={localCourse.detailedDescription || ''}
+                onChange={(e) => handleInputChange('detailedDescription', e.target.value)}
+                placeholder="Enter detailed course description..."
+              />
+            </Form.Group>
+
+            {/* Delivery Time */}
+            <Form.Group className="mb-3">
+              <Form.Label>
+                <strong>Delivery Time</strong>
+              </Form.Label>
+              <Form.Control
+                type="text"
+                value={localCourse.deliveryTime || ''}
+                onChange={(e) => handleInputChange('deliveryTime', e.target.value)}
+                placeholder="e.g., 48 Working Hours"
+              />
+            </Form.Group>
+
+            {/* Language */}
+            <Form.Group className="mb-3">
+              <Form.Label>
+                <strong>Language</strong>
+              </Form.Label>
+              <Form.Control
+                type="text"
+                value={localCourse.language || ''}
+                onChange={(e) => handleInputChange('language', e.target.value)}
+                placeholder="e.g., Tamil"
+              />
+            </Form.Group>
+
+            {/* Disclaimer */}
+            <Form.Group className="mb-3">
+              <Form.Label>
+                <strong>Disclaimer</strong>
+              </Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={3}
+                value={localCourse.disclaimer || ''}
+                onChange={(e) => handleInputChange('disclaimer', e.target.value)}
+                placeholder="Enter course disclaimer..."
+              />
+            </Form.Group>
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={onHide}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={handleSave}>
+            Save Details
+          </Button>
+        </Modal.Footer>
+      </Modal>
+    )
   }
 
   return (
@@ -203,6 +498,13 @@ const CourseManagement = () => {
                           </Button>
                           <Button
                             size="sm"
+                            variant="outline-success"
+                            onClick={() => handleShowDetailsModal(course)}
+                          >
+                            Details
+                          </Button>
+                          <Button
+                            size="sm"
                             variant="outline-danger"
                             onClick={() => handleDelete(course._id)}
                           >
@@ -243,6 +545,13 @@ const CourseManagement = () => {
         onHide={handleCloseContentModal}
         selectedCourse={selectedCourse}
         showAlert={showAlert}
+      />
+
+      {/* Course Details Modal */}
+      <CourseDetailsModal
+        show={showDetailsModal}
+        onHide={handleCloseDetailsModal}
+        course={selectedCourse}
       />
     </div>
   )

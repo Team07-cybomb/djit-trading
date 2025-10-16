@@ -5,7 +5,11 @@ const {
   createCourse, 
   updateCourse, 
   deleteCourse, 
-  purchaseCourse 
+  purchaseCourse,
+  updateCourseDetails,
+  getCourseWithDetails,
+  addCourseContent,
+  removeCourseContent
 } = require('../controllers/courseController');
 
 const { auth, adminAuth } = require('../middleware/auth');
@@ -18,6 +22,7 @@ const router = express.Router();
 // ==========================
 router.get('/', getCourses);
 router.get('/:id', getCourse);
+router.get('/:id/details', getCourseWithDetails); // New route for full course details
 
 // ==========================
 // Purchase course with coupon
@@ -53,5 +58,12 @@ router.get('/:id/content', auth, async (req, res) => {
 router.post('/', auth, adminAuth, createCourse);
 router.put('/:id', auth, adminAuth, updateCourse);
 router.delete('/:id', auth, adminAuth, deleteCourse);
+
+// ==========================
+// Course details management routes (Admin only)
+// ==========================
+router.put('/:id/details', auth, adminAuth, updateCourseDetails);
+router.post('/:id/content', auth, adminAuth, addCourseContent);
+router.delete('/:id/content', auth, adminAuth, removeCourseContent);
 
 module.exports = router;

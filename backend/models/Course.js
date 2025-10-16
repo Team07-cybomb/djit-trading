@@ -48,6 +48,36 @@ const courseSchema = new mongoose.Schema({
     type: String,
     enum: ['active', 'inactive'],
     default: 'active'
+  },
+  // New fields for detailed course information
+  detailedDescription: {
+    type: String,
+    default: ''
+  },
+  steps: [{
+    type: String
+  }],
+  courseContains: [{
+    type: String
+  }],
+  indicators: [{
+    name: String,
+    description: String
+  }],
+  notes: [{
+    type: String
+  }],
+  disclaimer: {
+    type: String,
+    default: 'This course is offered solely for educational purposes and is intended for beginners who wish to learn about trading indicators. Participation in this course is voluntary. By purchasing, you acknowledge and agree that no refunds will be granted once access is provided. Trading involves inherent risk and may not be suitable for everyone.'
+  },
+  deliveryTime: {
+    type: String,
+    default: '48 Working Hours'
+  },
+  language: {
+    type: String,
+    default: 'Tamil'
   }
 }, {
   timestamps: true
