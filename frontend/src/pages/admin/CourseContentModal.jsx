@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Modal, Form, Button, Row, Col, Badge, Card, Alert, Spinner } from "react-bootstrap";
+import { Modal, Form, Button, Row, Col, Badge, Card, Alert, Spinner, Table, Pagination } from "react-bootstrap";
 import axios from "axios";
 
 const CourseContentModal = ({ show, onHide, selectedCourse, showAlert, onContentAdded }) => {
@@ -8,6 +8,14 @@ const CourseContentModal = ({ show, onHide, selectedCourse, showAlert, onContent
   const [videoFile, setVideoFile] = useState(null);
   const [documentFile, setDocumentFile] = useState(null);
   const [localAlert, setLocalAlert] = useState({ show: false, message: "", type: "" });
+  
+  // Admin data states
+  const [allContentData, setAllContentData] = useState([]);
+  const [loadingData, setLoadingData] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [statistics, setStatistics] = useState(null);
+  const [activeTab, setActiveTab] = useState("upload"); // "upload" or "viewAll"
 
   function initialFormData() {
     return { title: "", description: "", type: "video", videoUrl: "", documentUrl: "", duration: "", order: 1, isFree: false };
@@ -29,6 +37,31 @@ const CourseContentModal = ({ show, onHide, selectedCourse, showAlert, onContent
       setDocumentFile(null);
     }
   }, [selectedCourse, show]);
+
+  // Fetch all content data for admin
+  const fetchAllContentData = async (page = 1) => {
+    try {
+      setLoadingData(true);
+      const res = await api.get(`/course-content/admin/all-content?page=${page}&limit=10`);
+      if (res.data.success) {
+        setAllContentData(res.data.contents);
+        setCurrentPage(res.data.pagination.currentPage);
+        setTotalPages(res.data.pagination.totalPages);
+        setStatistics(res.data.statistics);
+      }
+    } catch (error) {
+      console.error("Error fetching content data:", error);
+      showLocalAlert("Error fetching content data", "danger");
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  useEffect(() => {
+    if (show && activeTab === "viewAll") {
+      fetchAllContentData();
+    }
+  }, [show, activeTab]);
 
   const showLocalAlert = (message, type) => {
     setLocalAlert({ show: true, message, type });
@@ -62,13 +95,18 @@ const CourseContentModal = ({ show, onHide, selectedCourse, showAlert, onContent
       setVideoFile(null);
       setDocumentFile(null);
 
-      // ✅ Safe replacement for optional chaining
+      // Clear file inputs
       const videoInput = document.getElementById("videoFileInput");
       if (videoInput) videoInput.value = "";
       const documentInput = document.getElementById("documentFileInput");
       if (documentInput) documentInput.value = "";
 
       if (onContentAdded) onContentAdded(res.data.content);
+      
+      // Refresh data if on view all tab
+      if (activeTab === "viewAll") {
+        fetchAllContentData();
+      }
     } catch (error) {
       console.error("Upload error:", error);
       let msg = "Error adding content";
@@ -123,91 +161,327 @@ const CourseContentModal = ({ show, onHide, selectedCourse, showAlert, onContent
     setVideoFile(null);
     setDocumentFile(null);
     setLocalAlert({ show: false, message: "", type: "" });
+    setActiveTab("upload");
     onHide();
   };
 
+  const renderStatistics = () => (
+    <Card className="mb-4">
+      <Card.Header>
+        <h6 className="mb-0">📊 Storage Statistics</h6>
+      </Card.Header>
+      <Card.Body>
+        {statistics ? (
+          <Row>
+            <Col md={6}>
+              <div className="mb-3">
+                <strong>Total Content:</strong> {statistics.totalContent}
+              </div>
+              <div className="mb-3">
+                <strong>Total Videos:</strong> {statistics.totalVideos}
+              </div>
+              <div className="mb-3">
+                <strong>Total Documents:</strong> {statistics.totalDocuments}
+              </div>
+            </Col>
+            <Col md={6}>
+              <div className="mb-3">
+                <strong>Video Storage:</strong> {statistics.formatted.totalVideoSize}
+              </div>
+              <div className="mb-3">
+                <strong>Document Storage:</strong> {statistics.formatted.totalDocumentSize}
+              </div>
+              <div className="mb-3">
+                <strong>Total Storage Used:</strong> {statistics.formatted.totalStorageUsed}
+              </div>
+            </Col>
+          </Row>
+        ) : (
+          <Spinner animation="border" size="sm" />
+        )}
+      </Card.Body>
+    </Card>
+  );
+
+  const renderContentTable = () => (
+    <Card>
+      <Card.Header className="d-flex justify-content-between align-items-center">
+        <h6 className="mb-0">All Uploaded Content</h6>
+        <Button variant="outline-primary" size="sm" onClick={() => fetchAllContentData()}>
+          Refresh
+        </Button>
+      </Card.Header>
+      <Card.Body>
+        {loadingData ? (
+          <div className="text-center">
+            <Spinner animation="border" />
+            <p className="mt-2">Loading content data...</p>
+          </div>
+        ) : (
+          <>
+            <div className="table-responsive">
+              <Table striped bordered hover size="sm">
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Type</th>
+                    <th>Course</th>
+                    <th>File Size</th>
+                    <th>Free</th>
+                    <th>Uploaded</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allContentData.map((content) => (
+                    <tr key={content._id}>
+                      <td className="text-truncate" style={{ maxWidth: "200px" }} title={content.title}>
+                        {content.title}
+                      </td>
+                      <td>
+                        <Badge bg={content.type === "video" ? "primary" : "secondary"}>
+                          {content.type}
+                        </Badge>
+                      </td>
+                      <td className="text-truncate" style={{ maxWidth: "150px" }} title={content.course?.title}>
+                        {content.course?.title || "N/A"}
+                      </td>
+                      <td>
+                        {content.videoFile?.size 
+                          ? `${(content.videoFile.size / 1048576).toFixed(2)} MB`
+                          : content.documentFile?.size
+                          ? `${(content.documentFile.size / 1048576).toFixed(2)} MB`
+                          : "N/A"}
+                      </td>
+                      <td>
+                        <Badge bg={content.isFree ? "success" : "warning"}>
+                          {content.isFree ? "Yes" : "No"}
+                        </Badge>
+                      </td>
+                      <td>
+                        {new Date(content.createdAt).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </div>
+            
+            {totalPages > 1 && (
+              <div className="d-flex justify-content-center mt-3">
+                <Pagination>
+                  <Pagination.Prev 
+                    disabled={currentPage === 1} 
+                    onClick={() => fetchAllContentData(currentPage - 1)} 
+                  />
+                  {[...Array(totalPages)].map((_, idx) => (
+                    <Pagination.Item
+                      key={idx + 1}
+                      active={idx + 1 === currentPage}
+                      onClick={() => fetchAllContentData(idx + 1)}
+                    >
+                      {idx + 1}
+                    </Pagination.Item>
+                  ))}
+                  <Pagination.Next 
+                    disabled={currentPage === totalPages} 
+                    onClick={() => fetchAllContentData(currentPage + 1)} 
+                  />
+                </Pagination>
+              </div>
+            )}
+          </>
+        )}
+      </Card.Body>
+    </Card>
+  );
+
   return (
-    <Modal show={show} onHide={handleModalClose} size="lg" backdrop="static" keyboard={false}>
+    <Modal show={show} onHide={handleModalClose} size="xl" backdrop="static" keyboard={false}>
       <Modal.Header closeButton>
-        <Modal.Title>Add Content {selectedCourse ? ` - ${selectedCourse.title}` : ""}</Modal.Title>
+        <Modal.Title>
+          Course Content Management {selectedCourse ? ` - ${selectedCourse.title}` : ""}
+        </Modal.Title>
       </Modal.Header>
       <Modal.Body>
-        {localAlert.show && <Alert variant={localAlert.type} dismissible onClose={() => setLocalAlert({ show: false, message: "", type: "" })}>{localAlert.message}</Alert>}
-        <Card>
-          <Card.Header><h6 className="mb-0">Add New Content</h6></Card.Header>
-          <Card.Body>
-            <Form onSubmit={handleContentSubmit}>
-              {/* Title & Description */}
-              <Form.Group className="mb-3">
-                <Form.Label>Content Title *</Form.Label>
-                <Form.Control type="text" value={contentFormData.title} onChange={(e) => setContentFormData({ ...contentFormData, title: e.target.value })} placeholder="Enter content title" required />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Label>Description</Form.Label>
-                <Form.Control as="textarea" rows={2} value={contentFormData.description} onChange={(e) => setContentFormData({ ...contentFormData, description: e.target.value })} placeholder="Optional description" />
-              </Form.Group>
+        {localAlert.show && (
+          <Alert variant={localAlert.type} dismissible onClose={() => setLocalAlert({ show: false, message: "", type: "" })}>
+            {localAlert.message}
+          </Alert>
+        )}
+        
+        {/* Tab Navigation */}
+        <div className="mb-3">
+          <Button
+            variant={activeTab === "upload" ? "primary" : "outline-primary"}
+            className="me-2"
+            onClick={() => setActiveTab("upload")}
+          >
+            📤 Upload Content
+          </Button>
+          <Button
+            variant={activeTab === "viewAll" ? "primary" : "outline-primary"}
+            onClick={() => setActiveTab("viewAll")}
+          >
+            📊 View All Content
+          </Button>
+        </div>
 
-              {/* Type & Order */}
-              <Row>
-                <Col md={6}><Form.Group className="mb-3">
-                  <Form.Label>Content Type *</Form.Label>
-                  <Form.Select value={contentFormData.type} onChange={(e) => setContentFormData({ ...contentFormData, type: e.target.value })}>
-                    <option value="video">Video</option>
-                    <option value="document">Document</option>
-                    <option value="pdf">PDF</option>
-                    <option value="quiz">Quiz</option>
-                    <option value="assignment">Assignment</option>
-                  </Form.Select>
-                </Form.Group></Col>
-                <Col md={6}><Form.Group className="mb-3">
-                  <Form.Label>Order *</Form.Label>
-                  <Form.Control type="number" min="1" value={contentFormData.order} onChange={(e) => setContentFormData({ ...contentFormData, order: parseInt(e.target.value) || 1 })} required />
-                </Form.Group></Col>
-              </Row>
-
-              {/* Video */}
-              {contentFormData.type === "video" && <>
+        {activeTab === "upload" ? (
+          <Card>
+            <Card.Header><h6 className="mb-0">Add New Content</h6></Card.Header>
+            <Card.Body>
+              <Form onSubmit={handleContentSubmit}>
+                {/* Title & Description */}
                 <Form.Group className="mb-3">
-                  <Form.Label>Upload Video</Form.Label>
-                  <Form.Control id="videoFileInput" type="file" accept="video/*" onChange={handleVideoFileChange} />
-                  <Form.Text>Max 10GB. MP4/AVI/MOV</Form.Text>
-                  {videoFile && <div className="mt-2 d-flex gap-2"><Badge bg="info" className="flex-grow-1 text-truncate">{videoFile.name} ({(videoFile.size / 1048576).toFixed(2)} MB)</Badge><Button size="sm" variant="outline-danger" onClick={() => clearFile("video")}>×</Button></div>}
+                  <Form.Label>Content Title *</Form.Label>
+                  <Form.Control 
+                    type="text" 
+                    value={contentFormData.title} 
+                    onChange={(e) => setContentFormData({ ...contentFormData, title: e.target.value })} 
+                    placeholder="Enter content title" 
+                    required 
+                  />
                 </Form.Group>
                 <Form.Group className="mb-3">
-                  <Form.Label>Or Video URL</Form.Label>
-                  <Form.Control type="url" placeholder="https://youtube.com/embed/..." value={contentFormData.videoUrl} onChange={(e) => setContentFormData({ ...contentFormData, videoUrl: e.target.value })} disabled={!!videoFile} />
+                  <Form.Label>Description</Form.Label>
+                  <Form.Control 
+                    as="textarea" 
+                    rows={2} 
+                    value={contentFormData.description} 
+                    onChange={(e) => setContentFormData({ ...contentFormData, description: e.target.value })} 
+                    placeholder="Optional description" 
+                  />
                 </Form.Group>
-              </>}
 
-              {/* Document */}
-              {(contentFormData.type === "document" || contentFormData.type === "pdf") && <>
+                {/* Type & Order */}
+                <Row>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Content Type *</Form.Label>
+                      <Form.Select 
+                        value={contentFormData.type} 
+                        onChange={(e) => setContentFormData({ ...contentFormData, type: e.target.value })}
+                      >
+                        <option value="video">Video</option>
+                        <option value="document">Document</option>
+                        <option value="pdf">PDF</option>
+                        <option value="quiz">Quiz</option>
+                        <option value="assignment">Assignment</option>
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Order *</Form.Label>
+                      <Form.Control 
+                        type="number" 
+                        min="1" 
+                        value={contentFormData.order} 
+                        onChange={(e) => setContentFormData({ ...contentFormData, order: parseInt(e.target.value) || 1 })} 
+                        required 
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
+
+                {/* Video */}
+                {contentFormData.type === "video" && <>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Upload Video</Form.Label>
+                    <Form.Control 
+                      id="videoFileInput" 
+                      type="file" 
+                      accept="video/*" 
+                      onChange={handleVideoFileChange} 
+                    />
+                    <Form.Text>Max 10GB. MP4/AVI/MOV</Form.Text>
+                    {videoFile && (
+                      <div className="mt-2 d-flex gap-2">
+                        <Badge bg="info" className="flex-grow-1 text-truncate">
+                          {videoFile.name} ({(videoFile.size / 1048576).toFixed(2)} MB)
+                        </Badge>
+                        <Button size="sm" variant="outline-danger" onClick={() => clearFile("video")}>×</Button>
+                      </div>
+                    )}
+                  </Form.Group>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Or Video URL</Form.Label>
+                    <Form.Control 
+                      type="url" 
+                      placeholder="https://youtube.com/embed/..." 
+                      value={contentFormData.videoUrl} 
+                      onChange={(e) => setContentFormData({ ...contentFormData, videoUrl: e.target.value })} 
+                      disabled={!!videoFile} 
+                    />
+                  </Form.Group>
+                </>}
+
+                {/* Document */}
+                {(contentFormData.type === "document" || contentFormData.type === "pdf") && <>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Upload Document</Form.Label>
+                    <Form.Control 
+                      id="documentFileInput" 
+                      type="file" 
+                      accept=".pdf,.doc,.docx,.ppt,.pptx,.txt" 
+                      onChange={handleDocumentFileChange} 
+                    />
+                    <Form.Text>Max 50MB. PDF/Word/PPT/Text</Form.Text>
+                    {documentFile && (
+                      <div className="mt-2 d-flex gap-2">
+                        <Badge bg="info" className="flex-grow-1 text-truncate">
+                          {documentFile.name} ({(documentFile.size / 1048576).toFixed(2)} MB)
+                        </Badge>
+                        <Button size="sm" variant="outline-danger" onClick={() => clearFile("document")}>×</Button>
+                      </div>
+                    )}
+                  </Form.Group>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Or Document URL</Form.Label>
+                    <Form.Control 
+                      type="url" 
+                      placeholder="https://example.com/doc.pdf" 
+                      value={contentFormData.documentUrl} 
+                      onChange={(e) => setContentFormData({ ...contentFormData, documentUrl: e.target.value })} 
+                      disabled={!!documentFile} 
+                    />
+                  </Form.Group>
+                </>}
+
+                {/* Duration & Free */}
                 <Form.Group className="mb-3">
-                  <Form.Label>Upload Document</Form.Label>
-                  <Form.Control id="documentFileInput" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.txt" onChange={handleDocumentFileChange} />
-                  <Form.Text>Max 50MB. PDF/Word/PPT/Text</Form.Text>
-                  {documentFile && <div className="mt-2 d-flex gap-2"><Badge bg="info" className="flex-grow-1 text-truncate">{documentFile.name} ({(documentFile.size / 1048576).toFixed(2)} MB)</Badge><Button size="sm" variant="outline-danger" onClick={() => clearFile("document")}>×</Button></div>}
+                  <Form.Label>Duration</Form.Label>
+                  <Form.Control 
+                    type="text" 
+                    placeholder="Optional" 
+                    value={contentFormData.duration} 
+                    onChange={(e) => setContentFormData({ ...contentFormData, duration: e.target.value })} 
+                  />
                 </Form.Group>
-                <Form.Group className="mb-3">
-                  <Form.Label>Or Document URL</Form.Label>
-                  <Form.Control type="url" placeholder="https://example.com/doc.pdf" value={contentFormData.documentUrl} onChange={(e) => setContentFormData({ ...contentFormData, documentUrl: e.target.value })} disabled={!!documentFile} />
-                </Form.Group>
-              </>}
+                <Form.Check 
+                  type="checkbox" 
+                  label="Free Preview" 
+                  checked={contentFormData.isFree} 
+                  onChange={(e) => setContentFormData({ ...contentFormData, isFree: e.target.checked })} 
+                  className="mb-3" 
+                />
 
-              {/* Duration & Free */}
-              <Form.Group className="mb-3">
-                <Form.Label>Duration</Form.Label>
-                <Form.Control type="text" placeholder="Optional" value={contentFormData.duration} onChange={(e) => setContentFormData({ ...contentFormData, duration: e.target.value })} />
-              </Form.Group>
-              <Form.Check type="checkbox" label="Free Preview" checked={contentFormData.isFree} onChange={(e) => setContentFormData({ ...contentFormData, isFree: e.target.checked })} className="mb-3" />
-
-              <Button type="submit" variant="primary" disabled={uploadLoading} className="w-100">
-                {uploadLoading ? <><Spinner as="span" animation="border" size="sm" className="me-2"/>Uploading...</> : "Add Content"}
-              </Button>
-            </Form>
-          </Card.Body>
-        </Card>
+                <Button type="submit" variant="primary" disabled={uploadLoading} className="w-100">
+                  {uploadLoading ? <><Spinner as="span" animation="border" size="sm" className="me-2"/>Uploading...</> : "Add Content"}
+                </Button>
+              </Form>
+            </Card.Body>
+          </Card>
+        ) : (
+          <>
+            {renderStatistics()}
+            {renderContentTable()}
+          </>
+        )}
       </Modal.Body>
-      <Modal.Footer><Button variant="secondary" onClick={handleModalClose}>Close</Button></Modal.Footer>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={handleModalClose}>Close</Button>
+      </Modal.Footer>
     </Modal>
   );
 };

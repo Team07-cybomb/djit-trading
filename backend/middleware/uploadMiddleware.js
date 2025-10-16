@@ -1,7 +1,7 @@
+// middleware/uploadMiddleware.js
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
-
 
 // Ensure uploads folder exists
 const uploadDir = path.join(__dirname, "../uploads");
@@ -18,7 +18,7 @@ const storage = multer.diskStorage({
 
 // File filter
 const fileFilter = (req, file, cb) => {
-  const videoTypes = ["video/mp4", "video/avi", "video/mov", "video/mkv"];
+  const videoTypes = ["video/mp4", "video/avi", "video/mov", "video/mkv", "video/webm"];
   const documentTypes = [
     "application/pdf",
     "application/msword",
@@ -33,11 +33,12 @@ const fileFilter = (req, file, cb) => {
   else cb(new Error("Unsupported file type for " + file.fieldname), false);
 };
 
-// Multer limits (separate for video/document)
+// Multer limits (global). Adjust fileSize as needed.
+// Current limit: 10 GB to allow large video uploads — adjust if necessary.
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 10 * 1024 * 1024 * 1024 }, // 500MB max for videos
+  limits: { fileSize: 10 * 1024 * 1024 * 1024 }, // 10GB
 });
 
 module.exports = upload;
