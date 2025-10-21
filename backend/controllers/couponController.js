@@ -1,6 +1,5 @@
 // controllers/couponController.js
 const Coupon = require('../models/coupon');
-const Course = require('../models/Course');
 
 exports.createCoupon = async (req, res) => {
   try {
@@ -74,10 +73,14 @@ exports.validateCoupon = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
 exports.applyCoupon = async (req, res) => {
   try {
     const { code, totalAmount } = req.body;
 
+    console.log('Apply coupon request:', { code, totalAmount });
+
+    // Validate required fields
     if (!code || !totalAmount) {
       return res.status(400).json({
         success: false,
@@ -85,8 +88,19 @@ exports.applyCoupon = async (req, res) => {
       });
     }
 
-    // Find the coupon
-    const coupon = await Coupon.findOne({ code: code.toUpperCase() });
+    // Validate totalAmount is a number
+    const numericTotalAmount = parseFloat(totalAmount);
+    if (isNaN(numericTotalAmount) || numericTotalAmount < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid total amount',
+      });
+    }
+
+    // Find the coupon (case insensitive search)
+    const coupon = await Coupon.findOne({ 
+      code: code.toString().toUpperCase().trim()
+    });
 
     if (!coupon) {
       return res.status(404).json({
@@ -104,10 +118,17 @@ exports.applyCoupon = async (req, res) => {
     }
 
     const now = new Date();
-    if (now < coupon.validFrom || now > coupon.validUntil) {
+    if (now < coupon.validFrom) {
       return res.status(400).json({
         success: false,
-        message: 'Coupon is expired or not yet valid',
+        message: 'Coupon is not yet valid',
+      });
+    }
+
+    if (now > coupon.validUntil) {
+      return res.status(400).json({
+        success: false,
+        message: 'Coupon has expired',
       });
     }
 
@@ -118,51 +139,56 @@ exports.applyCoupon = async (req, res) => {
       });
     }
 
-    if (coupon.minPurchase && totalAmount < coupon.minPurchase) {
+    if (coupon.minPurchase && numericTotalAmount < coupon.minPurchase) {
       return res.status(400).json({
         success: false,
         message: `Minimum purchase of ₹${coupon.minPurchase} required to use this coupon`,
       });
     }
 
-    // ✅ Calculate discount
+    // Calculate discount
     let discountAmount = 0;
     if (coupon.discountType === 'percentage') {
-      discountAmount = (totalAmount * coupon.discountValue) / 100;
+      discountAmount = (numericTotalAmount * coupon.discountValue) / 100;
       if (coupon.maxDiscount && discountAmount > coupon.maxDiscount) {
         discountAmount = coupon.maxDiscount;
       }
     } else if (coupon.discountType === 'fixed') {
-      discountAmount = coupon.discountValue;
+      discountAmount = Math.min(coupon.discountValue, numericTotalAmount);
     }
 
-    const finalAmount = totalAmount - discountAmount;
+    const finalAmount = Math.max(0, numericTotalAmount - discountAmount);
 
-    // ✅ Atomic update: increment usedCount
+    // Update coupon usage (only if not just validating)
     const updatedCoupon = await Coupon.findOneAndUpdate(
       { _id: coupon._id },
       {
         $inc: { usedCount: 1 },
         $set: {
-          ...(coupon.usageLimit &&
-            coupon.usedCount + 1 >= coupon.usageLimit && { isActive: false }),
+          ...(coupon.usageLimit && coupon.usedCount + 1 >= coupon.usageLimit && { isActive: false }),
         },
       },
       { new: true }
     );
 
+    console.log('Coupon applied successfully:', {
+      code: updatedCoupon.code,
+      discountAmount,
+      finalAmount
+    });
+
     return res.status(200).json({
       success: true,
       message: 'Coupon applied successfully',
-      discountAmount,
-      finalAmount,
+      discountAmount: parseFloat(discountAmount.toFixed(2)),
+      finalAmount: parseFloat(finalAmount.toFixed(2)),
       coupon: updatedCoupon,
     });
   } catch (error) {
     console.error('Error applying coupon:', error);
     return res.status(500).json({
       success: false,
-      message: 'Something went wrong while applying the coupon',
+      message: 'Internal server error while applying coupon',
       error: error.message,
     });
   }

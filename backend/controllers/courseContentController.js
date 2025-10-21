@@ -1,4 +1,3 @@
-// controllers/courseContentController.js
 const path = require("path");
 const fs = require("fs");
 const jwt = require("jsonwebtoken");
@@ -274,22 +273,16 @@ const streamVideo = async (req, res) => {
     // Get user ID from either header auth or query parameter
     let userId;
     
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+    if (req.user && req.user.id) {
       // User authenticated via header (normal API calls)
-      try {
-        const token = req.headers.authorization.split(' ')[1];
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        userId = decoded.id;
-      } catch (error) {
-        return res.status(401).json({ success: false, message: "Invalid authorization token" });
-      }
+      userId = req.user.id;
     } else if (req.query.token) {
       // User authenticated via token in URL (browser video tag)
       try {
         const decoded = jwt.verify(req.query.token, process.env.JWT_SECRET);
         userId = decoded.id;
       } catch (error) {
-        return res.status(401).json({ success: false, message: "Invalid URL token" });
+        return res.status(401).json({ success: false, message: "Invalid token" });
       }
     } else {
       return res.status(401).json({ success: false, message: "Authentication required" });
@@ -338,7 +331,6 @@ const streamVideo = async (req, res) => {
       'Content-Type': content.videoFile.mimetype || 'video/mp4',
       'Accept-Ranges': 'bytes',
       'Cache-Control': 'public, max-age=31536000', // Cache for 1 year
-      'Content-Disposition': 'inline', // Display in browser instead of downloading
     };
 
     if (range) {
