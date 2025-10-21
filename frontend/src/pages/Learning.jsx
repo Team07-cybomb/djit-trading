@@ -31,9 +31,10 @@ const Learning = () => {
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [nextContent, setNextContent] = useState(null);
   const [completionInProgress, setCompletionInProgress] = useState(false);
-  const [videoBlobUrls, setVideoBlobUrls] = useState({});
+  const [videoLoading, setVideoLoading] = useState(false);
 
   const videoRef = useRef(null);
+  const youtubeIframeRef = useRef(null);
   const progressIntervalRef = useRef(null);
 
   const { courseId } = useParams();
@@ -52,32 +53,20 @@ const Learning = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId, isAuthenticated]);
 
-  // Clean up blob URLs and intervals on unmount
+  // Clean up intervals on unmount
   useEffect(() => {
     return () => {
-      // Clean up blob URLs to prevent memory leaks
-      Object.values(videoBlobUrls).forEach(blobUrl => {
-        if (blobUrl && blobUrl.startsWith('blob:')) {
-          URL.revokeObjectURL(blobUrl);
-        }
-      });
-      
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
         progressIntervalRef.current = null;
       }
     };
-  }, [videoBlobUrls]);
+  }, []);
 
-  // When currentContent changes and it's a video, set up tracking and fetch blob URL
+  // When currentContent changes, set up video URL and tracking
   useEffect(() => {
     if (currentContent?.type === "video") {
-      // Fetch blob URL for local videos
-      if (currentContent.videoFile?.url && !isYouTubeUrl(currentContent.videoUrl)) {
-        fetchVideoBlobUrl(currentContent._id);
-      }
-      const cleanup = setupVideoTracking();
-      return cleanup;
+      setupVideoForContent();
     } else {
       // If not video, clear interval if set
       if (progressIntervalRef.current) {
@@ -99,13 +88,19 @@ const Learning = () => {
       setCourseContent(contents);
       setEnrollment(res.data.enrollment || null);
 
-      // set completedContents (make a Set)
-      setCompletedContents(new Set(res.data.progress.completedContentIds || []));
+      // Set completedContents from API response
+      const completedContentIds = res.data.progress?.completedContentIds || [];
+      setCompletedContents(new Set(completedContentIds));
+
+      // Calculate progress based on completed contents
+      const totalContents = contents.length;
+      const completedCount = completedContentIds.length;
+      const percentage = totalContents > 0 ? Math.round((completedCount / totalContents) * 100) : 0;
 
       setProgress({
-        completed: res.data.progress.completed || 0,
-        total: res.data.progress.total || contents.length,
-        percentage: res.data.progress.percentage || 0,
+        completed: completedCount,
+        total: totalContents,
+        percentage: percentage,
       });
 
       // Initialize video progress tracking
@@ -116,7 +111,7 @@ const Learning = () => {
             currentTime: 0,
             duration: content.duration || 0,
             percentage: 0,
-            completed: false,
+            completed: completedContentIds.includes(content._id),
           };
         }
       });
@@ -143,42 +138,74 @@ const Learning = () => {
     }
   };
 
-  const fetchVideoBlobUrl = async (contentId) => {
+  const setupVideoForContent = async () => {
+    if (!currentContent) return;
+
+    setVideoLoading(true);
+    
     try {
-      // Check if we already have a blob URL for this content
-      if (videoBlobUrls[contentId]) {
-        return videoBlobUrls[contentId];
+      if (isYouTubeUrl(currentContent.videoUrl)) {
+        // YouTube video - create embed URL
+        const videoId = extractYouTubeId(currentContent.videoUrl);
+        if (videoId) {
+          // Setup YouTube tracking after iframe loads
+          setTimeout(() => {
+            setupYouTubeTracking();
+          }, 1000);
+        }
+      } else if (currentContent.videoFile?.url) {
+        // Local video file - use direct streaming URL
+        setTimeout(() => {
+          setupLocalVideoTracking();
+        }, 500);
       }
-
-      const response = await axios.get(`/api/course-content/video/${contentId}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        responseType: 'blob'
-      });
-
-      const blob = new Blob([response.data], { type: response.headers['content-type'] });
-      const blobUrl = URL.createObjectURL(blob);
-
-      setVideoBlobUrls(prev => ({
-        ...prev,
-        [contentId]: blobUrl
-      }));
-
-      return blobUrl;
     } catch (error) {
-      console.error('Error fetching video blob:', error);
-      return null;
+      console.error("Error setting up video:", error);
+    } finally {
+      setVideoLoading(false);
     }
   };
 
-  const setupVideoTracking = () => {
-    const isYouTube = isYouTubeUrl(currentContent?.videoUrl);
-    const video = videoRef.current;
+  const isYouTubeUrl = (url) => {
+    if (!url) return false;
+    return /(?:youtube\.com\/watch\?v=|youtube\.com\/embed\/|youtu\.be\/)/.test(url);
+  };
 
-    if (!video || isYouTube) {
-      return () => {};
+  const extractYouTubeId = (url) => {
+    if (!url) return null;
+    const match = url.match(/[?&]v=([^&]+)/) || url.match(/youtu\.be\/([^?&/]+)/) || url.match(/embed\/([^?&/]+)/);
+    return match ? match[1] : null;
+  };
+
+  const getVideoSrc = (content) => {
+    if (!content) return null;
+
+    if (isYouTubeUrl(content.videoUrl)) {
+      const videoId = extractYouTubeId(content.videoUrl);
+      return videoId ? `https://www.youtube.com/embed/${videoId}?enablejsapi=1` : null;
+    }
+
+    if (content.videoFile?.url) {
+      // Use token in URL for video streaming (browser video tags don't send Authorization header)
+      const token = localStorage.getItem("token");
+      // Use the correct endpoint path that matches your route
+      return `/api/course-content/video/${content._id}?token=${token}`;
+    }
+
+    return null;
+  };
+
+  const setupLocalVideoTracking = () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    // Clear any existing interval
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
     }
 
     const handleLoadedMetadata = () => {
+      console.log("Video metadata loaded, duration:", video.duration);
       setVideoProgress((prev) => ({
         ...prev,
         [currentContent._id]: {
@@ -186,10 +213,11 @@ const Learning = () => {
           duration: video.duration || prev[currentContent._id]?.duration || 0,
         },
       }));
+      setVideoLoading(false);
     };
 
     const handleTimeUpdate = () => {
-      if (!video.duration) return;
+      if (!video.duration || video.duration === Infinity) return;
 
       const currentTime = video.currentTime;
       const duration = video.duration;
@@ -201,7 +229,7 @@ const Learning = () => {
           currentTime,
           duration,
           percentage,
-          completed: percentage >= COMPLETION_THRESHOLD,
+          completed: percentage >= COMPLETION_THRESHOLD || completedContents.has(currentContent._id),
         },
       }));
 
@@ -216,25 +244,57 @@ const Learning = () => {
       }
     };
 
+    const handleError = (e) => {
+      console.error("Video error:", e);
+      setVideoLoading(false);
+      // Handle 401 errors specifically
+      if (e.target.error && e.target.error.code === 4) {
+        console.error("Video access denied - authentication required");
+      }
+    };
+
+    const handleWaiting = () => {
+      setVideoLoading(true);
+    };
+
+    const handlePlaying = () => {
+      setVideoLoading(false);
+    };
+
+    // Remove existing event listeners first
+    video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+    video.removeEventListener("timeupdate", handleTimeUpdate);
+    video.removeEventListener("ended", handleEnded);
+    video.removeEventListener("error", handleError);
+    video.removeEventListener("waiting", handleWaiting);
+    video.removeEventListener("playing", handlePlaying);
+
+    // Add new event listeners
     video.addEventListener("loadedmetadata", handleLoadedMetadata);
     video.addEventListener("timeupdate", handleTimeUpdate);
     video.addEventListener("ended", handleEnded);
+    video.addEventListener("error", handleError);
+    video.addEventListener("waiting", handleWaiting);
+    video.addEventListener("playing", handlePlaying);
 
-    // Periodic check (safe if timeupdate doesn't fire)
+    // Set up periodic check as backup
     progressIntervalRef.current = setInterval(() => {
-      if (video.readyState > 0) {
+      if (video.readyState > 0 && video.duration && video.duration !== Infinity) {
         handleTimeUpdate();
       }
-    }, 1000);
+    }, 2000);
 
-    // Return cleanup function to be used by the effect
+    // Return cleanup function
     return () => {
       try {
         video.removeEventListener("loadedmetadata", handleLoadedMetadata);
         video.removeEventListener("timeupdate", handleTimeUpdate);
         video.removeEventListener("ended", handleEnded);
+        video.removeEventListener("error", handleError);
+        video.removeEventListener("waiting", handleWaiting);
+        video.removeEventListener("playing", handlePlaying);
       } catch (e) {
-        // ignore
+        // ignore errors
       }
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
@@ -243,71 +303,26 @@ const Learning = () => {
     };
   };
 
-  const isYouTubeUrl = (url) => {
-    if (!url) return false;
-    return /(?:youtube\.com\/watch\?v=|youtube\.com\/embed\/|youtu\.be\/)/.test(url);
+  const setupYouTubeTracking = () => {
+    const iframe = youtubeIframeRef.current;
+    if (!iframe) return;
+
+    // YouTube API tracking would go here
+    // For now, we'll rely on manual completion for YouTube videos
+    console.log("YouTube iframe loaded, manual completion required");
+    setVideoLoading(false);
   };
-
-  const extractYouTubeId = (url) => {
-    if (!url) return null;
-    const match = url.match(/[?&]v=([^&]+)/) || url.match(/youtu\.be\/([^?&/]+)/) || url.match(/embed\/([^?&/]+)/);
-    return match ? match[1] : null;
-  };
-
-  const getVideoUrl = async (content) => {
-    if (!content) return null;
-
-    // YouTube videos - use embed URL
-    if (content.videoUrl && isYouTubeUrl(content.videoUrl)) {
-      const videoId = extractYouTubeId(content.videoUrl);
-      if (videoId) {
-        return `https://www.youtube.com/embed/${videoId}`;
-      }
-      return content.videoUrl;
-    }
-
-    // Local videos - use blob URL
-    if (content.videoFile?.url) {
-      const blobUrl = await fetchVideoBlobUrl(content._id);
-      return blobUrl;
-    }
-
-    return null;
-  };
-
-  const [currentVideoUrl, setCurrentVideoUrl] = useState(null);
-
-  // Effect to load video URL when currentContent changes
-  useEffect(() => {
-    const loadVideoUrl = async () => {
-      if (currentContent?.type === 'video') {
-        const url = await getVideoUrl(currentContent);
-        setCurrentVideoUrl(url);
-      } else {
-        setCurrentVideoUrl(null);
-      }
-    };
-
-    loadVideoUrl();
-  }, [currentContent]);
 
   const getDocumentUrl = (content) => {
     if (!content) return null;
     if (content.documentUrl) return content.documentUrl;
     if (content.documentFile?.url) {
-      // For documents, we can still use direct URLs or implement blob streaming if needed
+      // For local documents, we might need to implement similar streaming
       if (content.documentFile.url.startsWith('http')) {
         return content.documentFile.url;
       }
-      const backendUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://your-production-domain.com'
-        : 'http://localhost:5000';
-      
-      const cleanPath = content.documentFile.url.startsWith('/') 
-        ? content.documentFile.url.substring(1) 
-        : content.documentFile.url;
-      
-      return `${backendUrl}/${cleanPath}`;
+      // For local files, you might want to create a document streaming endpoint
+      return content.documentFile.url;
     }
     return null;
   };
@@ -322,8 +337,9 @@ const Learning = () => {
   };
 
   const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60) || 0;
-    const secs = Math.floor(seconds % 60) || 0;
+    if (!seconds || seconds === 0 || seconds === Infinity) return "0:00";
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
@@ -338,11 +354,9 @@ const Learning = () => {
 
     try {
       setCompletionInProgress(true);
-      setMarkingComplete(true);
+      await markContentAsCompleted(currentContent._id);
 
-      const response = await markContentAsCompleted(currentContent._id);
-
-      // update next content
+      // Find next content
       const currentIndex = courseContent.findIndex((c) => c._id === currentContent._id);
       const next = currentIndex < courseContent.length - 1 ? courseContent[currentIndex + 1] : null;
       setNextContent(next);
@@ -351,7 +365,6 @@ const Learning = () => {
     } catch (err) {
       console.error("Error completing video:", err);
     } finally {
-      setMarkingComplete(false);
       setCompletionInProgress(false);
     }
   };
@@ -365,11 +378,18 @@ const Learning = () => {
         { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
       );
 
-      const returnedProgress = res.data.progress || {};
+      // Update progress based on API response or local calculation
+      const updatedCompletedContents = new Set(Array.from(completedContents));
+      updatedCompletedContents.add(contentId);
+      
+      const completedCount = updatedCompletedContents.size;
+      const totalContents = courseContent.length;
+      const percentage = totalContents > 0 ? Math.round((completedCount / totalContents) * 100) : 0;
+
       setProgress({
-        completed: returnedProgress.completed ?? progress.completed,
-        total: returnedProgress.total ?? progress.total,
-        percentage: returnedProgress.percentage ?? progress.percentage,
+        completed: completedCount,
+        total: totalContents,
+        percentage: percentage,
       });
 
       if (res.data.enrollment) {
@@ -379,11 +399,18 @@ const Learning = () => {
         }));
       }
 
-      setCompletedContents((prev) => {
-        const newSet = new Set(Array.from(prev));
-        newSet.add(contentId);
-        return newSet;
-      });
+      setCompletedContents(updatedCompletedContents);
+
+      // Update video progress to mark as completed
+      if (currentContent?.type === "video") {
+        setVideoProgress((prev) => ({
+          ...prev,
+          [contentId]: {
+            ...prev[contentId],
+            completed: true,
+          },
+        }));
+      }
 
       return res.data;
     } catch (err) {
@@ -396,19 +423,13 @@ const Learning = () => {
 
   const handleContentSelect = (content) => {
     setCurrentContent(content);
-    // If switching to local video, reset its currentTime to 0 to restart view
-    if (content.type === "video" && videoRef.current && !isYouTubeUrl(content.videoUrl)) {
-      try {
-        videoRef.current.currentTime = 0;
-      } catch (e) {
-        // ignore cross-origin issues (iframe etc.)
-      }
-    }
   };
 
   const handleContinueLearning = () => {
     setShowCompletionModal(false);
-    if (nextContent) setCurrentContent(nextContent);
+    if (nextContent) {
+      setCurrentContent(nextContent);
+    }
   };
 
   const handleStayOnContent = () => {
@@ -589,18 +610,29 @@ const Learning = () => {
                   {/* Video Content */}
                   {currentContent.type === "video" && (
                     <div className={styles.videoContainer}>
-                      {currentVideoUrl ? (
+                      {videoLoading && (
+                        <div className={styles.videoLoading}>
+                          <Spinner animation="border" role="status">
+                            <span className="visually-hidden">Loading video...</span>
+                          </Spinner>
+                          <p>Loading video content...</p>
+                        </div>
+                      )}
+                      
+                      {getVideoSrc(currentContent) ? (
                         <div className={styles.videoWrapper}>
                           {isYouTubeUrl(currentContent.videoUrl) ? (
                             <div className={styles.youtubeContainer}>
                               <div className={styles.iframeWrapper}>
                                 <iframe
+                                  ref={youtubeIframeRef}
                                   title={currentContent.title}
-                                  src={currentVideoUrl}
+                                  src={getVideoSrc(currentContent)}
                                   frameBorder="0"
                                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                                   allowFullScreen
                                   className={styles.youtubeIframe}
+                                  onLoad={() => setVideoLoading(false)}
                                 />
                               </div>
                             </div>
@@ -610,12 +642,13 @@ const Learning = () => {
                                 ref={videoRef}
                                 controls
                                 className={styles.videoPlayer}
-                                src={currentVideoUrl}
+                                src={getVideoSrc(currentContent)}
                                 controlsList="nodownload"
                                 preload="metadata"
+                                onLoadedData={() => setVideoLoading(false)}
                                 onError={(e) => {
                                   console.error("Video loading error:", e);
-                                  e.target.style.display = 'none';
+                                  setVideoLoading(false);
                                 }}
                               >
                                 Your browser does not support the video tag.
@@ -624,13 +657,15 @@ const Learning = () => {
                           )}
 
                           <div className={styles.videoStats}>
-                            <div className={styles.progressInfo}>
-                              <span>Progress: </span>
-                              <ProgressBar now={getVideoProgress(currentContent._id).percentage * 100} variant="primary" className={styles.videoProgressBar} />
-                              <span>
-                                {formatTime(getVideoProgress(currentContent._id).currentTime)} / {formatTime(getVideoProgress(currentContent._id).duration)}
-                              </span>
-                            </div>
+                            {!isYouTubeUrl(currentContent.videoUrl) && (
+                              <div className={styles.progressInfo}>
+                                <span>Progress: </span>
+                                <ProgressBar now={getVideoProgress(currentContent._id).percentage * 100} variant="primary" className={styles.videoProgressBar} />
+                                <span>
+                                  {formatTime(getVideoProgress(currentContent._id).currentTime)} / {formatTime(getVideoProgress(currentContent._id).duration)}
+                                </span>
+                              </div>
+                            )}
 
                             {completionInProgress && (
                               <Alert variant="info" className={styles.completionAlert}>

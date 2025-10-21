@@ -5,6 +5,7 @@ const User = require('../models/User');
 const Enrollment = require('../models/Enrollment');
 const Newsletter = require('../models/Newsletter');
 const Payment = require('../models/Payment');
+const userController = require('../controllers/userController');
 
 const router = express.Router();
 
@@ -68,10 +69,10 @@ router.get('/dashboard', async (req, res) => {
 
 // ========== ENHANCED USER MANAGEMENT ROUTES ==========
 
-// Get all users with advanced search and pagination
+// Get all users with advanced search, pagination, and batch filtering
 router.get('/users', async (req, res) => {
   try {
-    const { page = 1, limit = 10, search = '' } = req.query;
+    const { page = 1, limit = 10, search = '', batch = '' } = req.query;
     
     let searchFilter = {};
     if (search) {
@@ -87,6 +88,11 @@ router.get('/users', async (req, res) => {
       };
     }
 
+    // Add batch filter
+    if (batch) {
+      searchFilter.batch = batch;
+    }
+
     const users = await User.find(searchFilter)
       .select('-password')
       .sort({ createdAt: -1 })
@@ -95,15 +101,56 @@ router.get('/users', async (req, res) => {
 
     const total = await User.countDocuments(searchFilter);
 
+    // Get unique batches for filter dropdown
+    const batches = await User.distinct('batch');
+
     res.json({
       success: true,
       users,
       totalPages: Math.ceil(total / limit),
       currentPage: parseInt(page),
-      total
+      total,
+      batches
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Import users from CSV
+router.post('/users/import', userController.importUsers);
+
+// Get batch statistics
+router.get('/users/batch-stats', async (req, res) => {
+  try {
+    const batchStats = await User.aggregate([
+      {
+        $group: {
+          _id: '$batch',
+          count: { $sum: 1 },
+          lastImport: { $max: '$importDate' }
+        }
+      },
+      {
+        $sort: { lastImport: -1 }
+      }
+    ]);
+
+    const totalUsers = await User.countDocuments();
+    const importedUsers = await User.countDocuments({ importSource: 'csv_import' });
+
+    res.json({
+      success: true,
+      batchStats,
+      totalUsers,
+      importedUsers
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching batch statistics',
+      error: error.message
+    });
   }
 });
 
@@ -277,7 +324,8 @@ router.get('/users-stats', async (req, res) => {
       verifiedUsers,
       adminUsers,
       usersThisMonth,
-      usersByTradingSegment
+      usersByTradingSegment,
+      usersByBatch
     ] = await Promise.all([
       User.countDocuments(),
       User.countDocuments({ isVerified: true }),
@@ -295,6 +343,18 @@ router.get('/users-stats', async (req, res) => {
           } 
         },
         { $sort: { count: -1 } }
+      ]),
+      User.aggregate([
+        {
+          $group: {
+            _id: '$batch',
+            count: { $sum: 1 },
+            imported: {
+              $sum: { $cond: [{ $eq: ['$importSource', 'csv_import'] }, 1, 0] }
+            }
+          }
+        },
+        { $sort: { count: -1 } }
       ])
     ]);
 
@@ -306,7 +366,9 @@ router.get('/users-stats', async (req, res) => {
         adminUsers,
         usersThisMonth,
         usersByTradingSegment,
-        verificationRate: Math.round((verifiedUsers / totalUsers) * 100)
+        usersByBatch,
+        verificationRate: Math.round((verifiedUsers / totalUsers) * 100),
+        importedUsers: await User.countDocuments({ importSource: 'csv_import' })
       }
     });
   } catch (error) {
@@ -328,7 +390,8 @@ router.put('/users/:id/profile', async (req, res) => {
       lastName,
       phone2,
       discordId,
-      badge
+      badge,
+      batch
     } = req.body;
 
     const updateData = {
@@ -343,6 +406,11 @@ router.put('/users/:id/profile', async (req, res) => {
       'profile.discordId': discordId,
       'profile.badge': badge
     };
+
+    // Add batch if provided
+    if (batch) {
+      updateData.batch = batch;
+    }
 
     // Add address fields if provided
     if (address) {

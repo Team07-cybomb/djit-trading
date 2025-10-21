@@ -1,3 +1,4 @@
+// routes/courseContent.js
 const express = require("express");
 const router = express.Router();
 const upload = require("../middleware/uploadMiddleware");
@@ -23,8 +24,8 @@ router.get("/:courseId", auth, courseContentController.getCourseContents);
 router.put("/:id", auth, multiUpload, courseContentController.updateContent);
 router.delete("/:id", auth, courseContentController.deleteContent);
 
-// Video streaming route (protected)
-router.get("/video/:contentId", auth, courseContentController.streamVideo);
+// Video streaming route (protected) - now handles both header auth and token in URL
+router.get("/video/:contentId", courseContentController.streamVideo); // Removed auth middleware to handle manually
 
 // Progress tracking
 router.post("/:contentId/complete", auth, courseContentController.markAsCompleted);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Table, Button, Badge, Form, InputGroup, Modal, Alert, Image } from 'react-bootstrap'
+import { Card, Table, Button, Badge, Form, InputGroup, Modal, Alert, Image, Row, Col, ProgressBar } from 'react-bootstrap'
 import axios from 'axios'
 import * as XLSX from 'xlsx'
 
@@ -11,10 +11,19 @@ const UserManagement = () => {
   const [totalPages, setTotalPages] = useState(1)
   const [showRoleModal, setShowRoleModal] = useState(false)
   const [showDetailsModal, setShowDetailsModal] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [showBatchStatsModal, setShowBatchStatsModal] = useState(false)
   const [selectedUser, setSelectedUser] = useState(null)
   const [userDetails, setUserDetails] = useState(null)
   const [newRole, setNewRole] = useState('')
   const [alert, setAlert] = useState({ show: false, message: '', type: '' })
+  const [batches, setBatches] = useState([])
+  const [selectedBatch, setSelectedBatch] = useState('')
+  const [importResults, setImportResults] = useState(null)
+  const [importLoading, setImportLoading] = useState(false)
+  const [batchStats, setBatchStats] = useState(null)
+  const [csvFile, setCsvFile] = useState(null)
+  const [batchName, setBatchName] = useState('')
 
   // Get authentication token
   const getAuthToken = () => {
@@ -42,14 +51,15 @@ const UserManagement = () => {
 
   useEffect(() => {
     fetchUsers()
-  }, [currentPage, searchTerm])
+  }, [currentPage, searchTerm, selectedBatch])
 
   const fetchUsers = async () => {
     try {
       setLoading(true)
-      const response = await api.get(`/admin/users?page=${currentPage}&search=${searchTerm}`)
+      const response = await api.get(`/admin/users?page=${currentPage}&search=${searchTerm}&batch=${selectedBatch}`)
       setUsers(response.data.users)
       setTotalPages(response.data.totalPages)
+      setBatches(response.data.batches || [])
     } catch (error) {
       console.error('Error fetching users:', error)
       if (error.response?.status === 403) {
@@ -75,6 +85,17 @@ const UserManagement = () => {
     }
   }
 
+  const fetchBatchStats = async () => {
+    try {
+      const response = await api.get('/admin/users/batch-stats')
+      setBatchStats(response.data)
+      setShowBatchStatsModal(true)
+    } catch (error) {
+      console.error('Error fetching batch stats:', error)
+      showAlert('Error fetching batch statistics', 'danger')
+    }
+  }
+
   const showAlert = (message, type) => {
     setAlert({ show: true, message, type })
     setTimeout(() => setAlert({ show: false, message: '', type: '' }), 5000)
@@ -82,6 +103,11 @@ const UserManagement = () => {
 
   const handleSearch = (e) => {
     setSearchTerm(e.target.value)
+    setCurrentPage(1)
+  }
+
+  const handleBatchChange = (e) => {
+    setSelectedBatch(e.target.value)
     setCurrentPage(1)
   }
 
@@ -129,6 +155,47 @@ const UserManagement = () => {
     }
   }
 
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      setCsvFile(file)
+      // Generate batch name from filename
+      const nameWithoutExt = file.name.replace('.csv', '')
+      setBatchName(nameWithoutExt)
+    }
+  }
+
+  const importCSV = async () => {
+    if (!csvFile) {
+      showAlert('Please select a CSV file to import', 'warning')
+      return
+    }
+
+    try {
+      setImportLoading(true)
+      const formData = new FormData()
+      formData.append('csvFile', csvFile)
+      formData.append('batchName', batchName)
+
+      const response = await api.post('/admin/users/import', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      })
+
+      setImportResults(response.data)
+      showAlert(`CSV import completed! ${response.data.results.successful} users imported successfully.`, 'success')
+      setCsvFile(null)
+      setBatchName('')
+      fetchUsers()
+    } catch (error) {
+      console.error('Error importing CSV:', error)
+      showAlert('Error importing CSV file', 'danger')
+    } finally {
+      setImportLoading(false)
+    }
+  }
+
   // Get profile picture URL or return null
   const getProfilePicture = (user) => {
     if (user?.profile?.profilePicture?.url) {
@@ -157,12 +224,13 @@ const UserManagement = () => {
         'Alternate Phone': user.profile?.phone2 || '',
         'Birthday': user.profile?.birthday ? new Date(user.profile.birthday).toLocaleDateString() : '',
         'TradingView ID': user.profile?.tradingViewId || '',
-        //'Vishcard ID': user.profile?.vishcardId || '',
         'Discord ID': user.profile?.discordId || '',
         'Trading Segment': user.profile?.tradingSegment || '',
         'Badge': user.profile?.badge || '',
         'Profile Picture': getProfilePicture(user) || 'No picture',
         'Role': user.role,
+        'Batch': user.batch || 'default',
+        'Import Source': user.importSource || 'manual',
         'Status': user.isActive !== false ? 'Active' : 'Inactive',
         'Verified': user.isVerified ? 'Yes' : 'No',
         'Joined Date': new Date(user.createdAt).toLocaleDateString(),
@@ -187,12 +255,13 @@ const UserManagement = () => {
         { wch: 15 }, // Alternate Phone
         { wch: 12 }, // Birthday
         { wch: 15 }, // TradingView ID
-        //{ wch: 15 }, // Vishcard ID
         { wch: 15 }, // Discord ID
         { wch: 15 }, // Trading Segment
         { wch: 12 }, // Badge
         { wch: 20 }, // Profile Picture
         { wch: 10 }, // Role
+        { wch: 15 }, // Batch
+        { wch: 15 }, // Import Source
         { wch: 10 }, // Status
         { wch: 10 }, // Verified
         { wch: 12 }, // Joined Date
@@ -238,6 +307,14 @@ const UserManagement = () => {
     }
   }
 
+  const getImportSourceVariant = (source) => {
+    switch (source) {
+      case 'csv_import': return 'info'
+      case 'manual': return 'secondary'
+      default: return 'secondary'
+    }
+  }
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -277,6 +354,19 @@ const UserManagement = () => {
             {loading ? 'Loading...' : `Total Users: ${users.length}`}
           </div>
           <Button 
+            variant="info" 
+            onClick={fetchBatchStats}
+            disabled={loading}
+          >
+            📊 Batch Stats
+          </Button>
+          <Button 
+            variant="primary" 
+            onClick={() => setShowImportModal(true)}
+          >
+            📁 Import CSV
+          </Button>
+          <Button 
             variant="success" 
             onClick={exportToExcel}
             disabled={users.length === 0 || loading}
@@ -294,8 +384,8 @@ const UserManagement = () => {
 
       <Card className="admin-card mb-4">
         <Card.Body>
-          <div className="row">
-            <div className="col-md-8">
+          <Row>
+            <Col md={6}>
               <InputGroup>
                 <Form.Control
                   type="text"
@@ -307,13 +397,26 @@ const UserManagement = () => {
                   🔍 Search
                 </Button>
               </InputGroup>
-            </div>
-            <div className="col-md-4 text-end">
+            </Col>
+            <Col md={3}>
+              <Form.Select
+                value={selectedBatch}
+                onChange={handleBatchChange}
+              >
+                <option value="">All Batches</option>
+                {batches.map((batch, index) => (
+                  <option key={index} value={batch}>
+                    {batch}
+                  </option>
+                ))}
+              </Form.Select>
+            </Col>
+            <Col md={3} className="text-end">
               <small className="text-muted">
                 Search by: username, email, first name, last name, phone, trading segment
               </small>
-            </div>
-          </div>
+            </Col>
+          </Row>
         </Card.Body>
       </Card>
 
@@ -322,6 +425,9 @@ const UserManagement = () => {
           <h5 className="mb-0">All Users</h5>
           <div className="d-flex align-items-center gap-2">
             <Badge bg="primary">{users.length} users</Badge>
+            {selectedBatch && (
+              <Badge bg="info">Batch: {selectedBatch}</Badge>
+            )}
           </div>
         </Card.Header>
         <Card.Body>
@@ -343,6 +449,7 @@ const UserManagement = () => {
                       <th>Contact</th>
                       <th>Trading Details</th>
                       <th>Role</th>
+                      <th>Batch</th>
                       <th>Joined</th>
                       <th>Status</th>
                       <th>Actions</th>
@@ -418,16 +525,23 @@ const UserManagement = () => {
                             {user.role.toUpperCase()}
                           </Badge>
                         </td>
+                        <td>
+                          <div>
+                            <Badge bg={getImportSourceVariant(user.importSource)} className="mb-1">
+                              {user.importSource === 'csv_import' ? 'Imported' : 'Manual'}
+                            </Badge>
+                            <div>
+                              <small className="text-muted">
+                                {user.batch || 'default'}
+                              </small>
+                            </div>
+                          </div>
+                        </td>
                         <td>{formatDate(user.createdAt)}</td>
                         <td>
                           <Badge bg={user.isActive !== false ? 'success' : 'danger'}>
                             {user.isActive !== false ? 'Active' : 'Inactive'}
                           </Badge>
-                          <div>
-                            {/* <small className={user.isVerified ? 'text-success' : 'text-warning'}>
-                              {user.isVerified ? '✓ Verified' : '⚠ Unverified'}
-                            </small> */}
-                          </div>
                         </td>
                         <td>
                           <div className="d-flex gap-2 flex-wrap">
@@ -466,47 +580,38 @@ const UserManagement = () => {
 
               {/* Pagination */}
               {totalPages > 1 && (
-                <div className="d-flex justify-content-between align-items-center mt-4">
-                  <div className="text-muted">
-                    Page {currentPage} of {totalPages}
-                  </div>
+                <div className="d-flex justify-content-center mt-4">
                   <nav>
-                    <ul className="pagination mb-0">
+                    <ul className="pagination">
                       <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
-                        <Button
-                          variant="outline-primary"
-                          size="sm"
+                        <button
                           className="page-link"
                           onClick={() => handlePageChange(currentPage - 1)}
                           disabled={currentPage === 1}
                         >
-                          &laquo; Previous
-                        </Button>
+                          Previous
+                        </button>
                       </li>
                       
                       {getPageNumbers().map((page) => (
                         <li key={page} className={`page-item ${currentPage === page ? 'active' : ''}`}>
-                          <Button
-                            variant={currentPage === page ? 'primary' : 'outline-primary'}
-                            size="sm"
+                          <button
                             className="page-link"
                             onClick={() => handlePageChange(page)}
                           >
                             {page}
-                          </Button>
+                          </button>
                         </li>
                       ))}
                       
                       <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
-                        <Button
-                          variant="outline-primary"
-                          size="sm"
+                        <button
                           className="page-link"
                           onClick={() => handlePageChange(currentPage + 1)}
                           disabled={currentPage === totalPages}
                         >
-                          Next &raquo;
-                        </Button>
+                          Next
+                        </button>
                       </li>
                     </ul>
                   </nav>
@@ -515,15 +620,10 @@ const UserManagement = () => {
             </>
           ) : (
             <div className="text-center py-5">
-              <p className="text-muted">No users found</p>
-              {searchTerm && (
-                <Button 
-                  variant="outline-primary" 
-                  onClick={() => setSearchTerm('')}
-                >
-                  Clear Search
-                </Button>
-              )}
+              <h5 className="text-muted">No users found</h5>
+              <p className="text-muted">
+                {searchTerm || selectedBatch ? 'Try adjusting your search criteria' : 'No users in the system yet'}
+              </p>
             </div>
           )}
         </Card.Body>
@@ -535,59 +635,19 @@ const UserManagement = () => {
           <Modal.Title>Change User Role</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          {selectedUser && (
-            <div>
-              <div className="d-flex align-items-center mb-3">
-                {getProfilePicture(selectedUser) ? (
-                  <Image
-                    src={getProfilePicture(selectedUser)}
-                    roundedCircle
-                    style={{width: '50px', height: '50px', objectFit: 'cover'}}
-                    alt={`${selectedUser.username}'s profile`}
-                    className="me-3"
-                  />
-                ) : (
-                  <div 
-                    className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3"
-                    style={{width: '50px', height: '50px', fontSize: '1rem'}}
-                  >
-                    {getInitials(selectedUser)}
-                  </div>
-                )}
-                <div>
-                  <strong>{selectedUser.username}</strong>
-                  <div className="text-muted">{selectedUser.email}</div>
-                </div>
-              </div>
-              <Form.Group className="mb-3">
-                <Form.Label>Select Role</Form.Label>
-                <Form.Select
-                  value={newRole}
-                  onChange={(e) => setNewRole(e.target.value)}
-                >
-                  <option value="user">User</option>
-                  <option value="admin">Admin</option>
-                  <option value="moderator">Moderator</option>
-                </Form.Select>
-              </Form.Group>
-              <Alert variant="warning" className="mb-0">
-                <small>
-                  <strong>Warning:</strong> Admin users have full access to the system. 
-                  Only assign this role to trusted users.
-                </small>
-              </Alert>
-            </div>
-          )}
+          <p>
+            Change role for <strong>{selectedUser?.username}</strong> ({selectedUser?.email})
+          </p>
+          <Form.Select value={newRole} onChange={(e) => setNewRole(e.target.value)}>
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </Form.Select>
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowRoleModal(false)}>
             Cancel
           </Button>
-          <Button 
-            variant="primary" 
-            onClick={updateUserRole}
-            disabled={!newRole || newRole === selectedUser?.role}
-          >
+          <Button variant="primary" onClick={updateUserRole}>
             Update Role
           </Button>
         </Modal.Footer>
@@ -600,184 +660,305 @@ const UserManagement = () => {
         </Modal.Header>
         <Modal.Body>
           {userDetails && (
-            <div>
-              {/* Profile Header with Picture */}
-              <div className="d-flex align-items-center mb-4 p-3 bg-light rounded">
+            <Row>
+              <Col md={4} className="text-center mb-4">
                 {getProfilePicture(userDetails) ? (
                   <Image
                     src={getProfilePicture(userDetails)}
                     roundedCircle
-                    style={{width: '80px', height: '80px', objectFit: 'cover'}}
+                    style={{width: '120px', height: '120px', objectFit: 'cover'}}
                     alt={`${userDetails.username}'s profile`}
-                    className="me-4"
                   />
                 ) : (
                   <div 
-                    className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-4"
-                    style={{width: '80px', height: '80px', fontSize: '1.5rem'}}
+                    className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto"
+                    style={{width: '120px', height: '120px', fontSize: '2rem'}}
                   >
                     {getInitials(userDetails)}
                   </div>
                 )}
-                <div>
-                  <h4 className="mb-1">{userDetails.username}</h4>
-                  <p className="text-muted mb-1">{userDetails.email}</p>
-                  <div className="d-flex gap-2">
-                    <Badge bg={getRoleVariant(userDetails.role)}>
-                      {userDetails.role.toUpperCase()}
-                    </Badge>
-                    {userDetails.profile?.badge && (
-                      <Badge bg={getBadgeVariant(userDetails.profile.badge)}>
-                        {userDetails.profile.badge} Trader
-                      </Badge>
+                <h5 className="mt-3">{userDetails.username}</h5>
+                <Badge bg={getRoleVariant(userDetails.role)}>
+                  {userDetails.role.toUpperCase()}
+                </Badge>
+              </Col>
+              <Col md={8}>
+                <Row>
+                  <Col md={6}>
+                    <h6>Personal Information</h6>
+                    <p><strong>Name:</strong> {userDetails.profile?.firstName} {userDetails.profile?.lastName}</p>
+                    <p><strong>Email:</strong> {userDetails.email}</p>
+                    <p><strong>Phone:</strong> {userDetails.profile?.phone || 'N/A'}</p>
+                    <p><strong>Alt Phone:</strong> {userDetails.profile?.phone2 || 'N/A'}</p>
+                    <p><strong>Birthday:</strong> {userDetails.profile?.birthday ? formatDate(userDetails.profile.birthday) : 'N/A'}</p>
+                  </Col>
+                  <Col md={6}>
+                    <h6>Trading Information</h6>
+                    <p><strong>TradingView ID:</strong> {userDetails.profile?.tradingViewId || 'N/A'}</p>
+                    <p><strong>Discord ID:</strong> {userDetails.profile?.discordId || 'N/A'}</p>
+                    <p><strong>Trading Segment:</strong> {userDetails.profile?.tradingSegment || 'N/A'}</p>
+                    <p><strong>Badge:</strong> {userDetails.profile?.badge || 'N/A'}</p>
+                  </Col>
+                </Row>
+                <Row className="mt-3">
+                  <Col md={12}>
+                    <h6>Address Information</h6>
+                    {userDetails.profile?.address?.street ? (
+                      <p>
+                        {userDetails.profile.address.street}<br/>
+                        {userDetails.profile.address.city}, {userDetails.profile.address.state} {userDetails.profile.address.zipCode}<br/>
+                        {userDetails.profile.address.country}
+                      </p>
+                    ) : (
+                      <p>No address information</p>
                     )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="row">
-                <div className="col-md-6">
-                  <h6>Basic Information</h6>
-                  <Table borderless size="sm">
-                    <tbody>
-                      <tr>
-                        <td><strong>Username:</strong></td>
-                        <td>{userDetails.username}</td>
-                      </tr>
-                      <tr>
-                        <td><strong>Email:</strong></td>
-                        <td>{userDetails.email}</td>
-                      </tr>
-                      <tr>
-                        <td><strong>First Name:</strong></td>
-                        <td>{userDetails.profile?.firstName || 'Not provided'}</td>
-                      </tr>
-                      <tr>
-                        <td><strong>Last Name:</strong></td>
-                        <td>{userDetails.profile?.lastName || 'Not provided'}</td>
-                      </tr>
-                      <tr>
-                        <td><strong>Role:</strong></td>
-                        <td>
-                          <Badge bg={getRoleVariant(userDetails.role)}>
-                            {userDetails.role.toUpperCase()}
-                          </Badge>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </Table>
-                </div>
-                <div className="col-md-6">
-                  <h6>Contact Information</h6>
-                  <Table borderless size="sm">
-                    <tbody>
-                      <tr>
-                        <td><strong>Phone:</strong></td>
-                        <td>{userDetails.profile?.phone || 'Not provided'}</td>
-                      </tr>
-                      <tr>
-                        <td><strong>Alt Phone:</strong></td>
-                        <td>{userDetails.profile?.phone2 || 'Not provided'}</td>
-                      </tr>
-                      <tr>
-                        <td><strong>Birthday:</strong></td>
-                        <td>
-                          {userDetails.profile?.birthday 
-                            ? formatDate(userDetails.profile.birthday)
-                            : 'Not provided'
-                          }
-                        </td>
-                      </tr>
-                      <tr>
-                        <td><strong>Joined:</strong></td>
-                        <td>{formatDate(userDetails.createdAt)}</td>
-                      </tr>
-                      <tr>
-                        <td><strong>Status:</strong></td>
-                        <td>
-                          <Badge bg={userDetails.isActive !== false ? 'success' : 'danger'}>
-                            {userDetails.isActive !== false ? 'Active' : 'Inactive'}
-                          </Badge>
-                          {' '}
-                          <Badge bg={userDetails.isVerified ? 'success' : 'warning'}>
-                            {userDetails.isVerified ? 'Verified' : 'Unverified'}
-                          </Badge>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </Table>
-                </div>
-              </div>
-
-              <hr />
-
-              <div className="row">
-                <div className="col-md-6">
-                  <h6>Trading Information</h6>
-                  <Table borderless size="sm">
-                    <tbody>
-                      <tr>
-                        <td><strong>TradingView ID:</strong></td>
-                        <td>{userDetails.profile?.tradingViewId || 'Not provided'}</td>
-                      </tr>
-                      {/* <tr>
-                        <td><strong>Vishcard ID:</strong></td>
-                        <td>{userDetails.profile?.vishcardId || 'Not provided'}</td>
-                      </tr> */}
-                      <tr>
-                        <td><strong>Discord ID:</strong></td>
-                        <td>{userDetails.profile?.discordId || 'Not provided'}</td>
-                      </tr>
-                      <tr>
-                        <td><strong>Trading Segment:</strong></td>
-                        <td>{userDetails.profile?.tradingSegment || 'Not selected'}</td>
-                      </tr>
-                      <tr>
-                        <td><strong>Badge:</strong></td>
-                        <td>
-                          {userDetails.profile?.badge && (
-                            <Badge bg={getBadgeVariant(userDetails.profile.badge)}>
-                              {userDetails.profile.badge}
-                            </Badge>
-                          )}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </Table>
-                </div>
-                <div className="col-md-6">
-                  <h6>Address Information</h6>
-                  <Table borderless size="sm">
-                    <tbody>
-                      <tr>
-                        <td><strong>Street:</strong></td>
-                        <td>{userDetails.profile?.address?.street || 'Not provided'}</td>
-                      </tr>
-                      <tr>
-                        <td><strong>City:</strong></td>
-                        <td>{userDetails.profile?.address?.city || 'Not provided'}</td>
-                      </tr>
-                      <tr>
-                        <td><strong>State:</strong></td>
-                        <td>{userDetails.profile?.address?.state || 'Not provided'}</td>
-                      </tr>
-                      <tr>
-                        <td><strong>ZIP Code:</strong></td>
-                        <td>{userDetails.profile?.address?.zipCode || 'Not provided'}</td>
-                      </tr>
-                      <tr>
-                        <td><strong>Country:</strong></td>
-                        <td>{userDetails.profile?.address?.country || 'Not provided'}</td>
-                      </tr>
-                    </tbody>
-                  </Table>
-                </div>
-              </div>
-            </div>
+                  </Col>
+                </Row>
+                <Row className="mt-3">
+                  <Col md={6}>
+                    <h6>Account Information</h6>
+                    <p><strong>Batch:</strong> {userDetails.batch || 'default'}</p>
+                    <p><strong>Import Source:</strong> {userDetails.importSource || 'manual'}</p>
+                    <p><strong>Verified:</strong> {userDetails.isVerified ? 'Yes' : 'No'}</p>
+                    <p><strong>Joined:</strong> {formatDate(userDetails.createdAt)}</p>
+                  </Col>
+                </Row>
+              </Col>
+            </Row>
           )}
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowDetailsModal(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Import CSV Modal */}
+      <Modal show={showImportModal} onHide={() => setShowImportModal(false)} size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>📁 Import Users from CSV</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {importResults ? (
+            <div>
+              <Alert variant="success">
+                <h6>Import Completed Successfully!</h6>
+                <p>Batch: <strong>{importResults.batchName}</strong></p>
+              </Alert>
+              
+              <div className="mb-4">
+                <h6>Import Results:</h6>
+                <Row>
+                  <Col md={4}>
+                    <Card className="text-center">
+                      <Card.Body>
+                        <h3 className="text-success">{importResults.results.successful}</h3>
+                        <p className="mb-0">Successful</p>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                  <Col md={4}>
+                    <Card className="text-center">
+                      <Card.Body>
+                        <h3 className="text-warning">{importResults.results.failed}</h3>
+                        <p className="mb-0">Failed</p>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                  <Col md={4}>
+                    <Card className="text-center">
+                      <Card.Body>
+                        <h3 className="text-info">{importResults.results.total}</h3>
+                        <p className="mb-0">Total</p>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
+              </div>
+
+              {importResults.results.errors.length > 0 && (
+                <div>
+                  <h6>Errors:</h6>
+                  <div style={{maxHeight: '200px', overflowY: 'auto'}}>
+                    {importResults.results.errors.map((error, index) => (
+                      <Alert key={index} variant="warning" className="py-2">
+                        <small>{error}</small>
+                      </Alert>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="text-center mt-3">
+                <Button 
+                  variant="primary" 
+                  onClick={() => {
+                    setImportResults(null)
+                    setShowImportModal(false)
+                  }}
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <Alert variant="info">
+                <h6>CSV Import Instructions</h6>
+                <p className="mb-1">• Upload a CSV file with user data</p>
+                <p className="mb-1">• Required field: Email (Email 1 or Email 2)</p>
+                <p className="mb-1">• Optional fields: First Name, Last Name, Phone, Address, etc.</p>
+                <p className="mb-0">• Duplicate emails will be skipped automatically</p>
+              </Alert>
+
+              <Form.Group className="mb-3">
+                <Form.Label>Select CSV File</Form.Label>
+                <Form.Control
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileUpload}
+                  disabled={importLoading}
+                />
+                <Form.Text className="text-muted">
+                  Maximum file size: 10MB
+                </Form.Text>
+              </Form.Group>
+
+              <Form.Group className="mb-3">
+                <Form.Label>Batch Name</Form.Label>
+                <Form.Control
+                  type="text"
+                  placeholder="Enter batch name (defaults to filename)"
+                  value={batchName}
+                  onChange={(e) => setBatchName(e.target.value)}
+                  disabled={importLoading}
+                />
+                <Form.Text className="text-muted">
+                  This helps you organize imported users into groups
+                </Form.Text>
+              </Form.Group>
+
+              {csvFile && (
+                <Alert variant="success">
+                  <strong>File selected:</strong> {csvFile.name}<br/>
+                  <strong>Batch name:</strong> {batchName}<br/>
+                  <strong>Size:</strong> {(csvFile.size / 1024 / 1024).toFixed(2)} MB
+                </Alert>
+              )}
+
+              {importLoading && (
+                <div className="text-center">
+                  <div className="spinner-border text-primary" role="status">
+                    <span className="visually-hidden">Importing...</span>
+                  </div>
+                  <p className="mt-2">Importing users, please wait...</p>
+                </div>
+              )}
+            </div>
+          )}
+        </Modal.Body>
+        {!importResults && (
+          <Modal.Footer>
+            <Button 
+              variant="secondary" 
+              onClick={() => setShowImportModal(false)}
+              disabled={importLoading}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="primary" 
+              onClick={importCSV}
+              disabled={!csvFile || importLoading}
+            >
+              {importLoading ? 'Importing...' : 'Import Users'}
+            </Button>
+          </Modal.Footer>
+        )}
+      </Modal>
+
+      {/* Batch Statistics Modal */}
+      <Modal show={showBatchStatsModal} onHide={() => setShowBatchStatsModal(false)} size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>📊 Batch Statistics</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {batchStats ? (
+            <div>
+              <Row className="mb-4">
+                <Col md={6}>
+                  <Card className="text-center bg-primary text-white">
+                    <Card.Body>
+                      <h3>{batchStats.totalUsers}</h3>
+                      <p className="mb-0">Total Users</p>
+                    </Card.Body>
+                  </Card>
+                </Col>
+                <Col md={6}>
+                  <Card className="text-center bg-info text-white">
+                    <Card.Body>
+                      <h3>{batchStats.importedUsers}</h3>
+                      <p className="mb-0">Imported Users</p>
+                    </Card.Body>
+                  </Card>
+                </Col>
+              </Row>
+
+              <h6>Batch Breakdown:</h6>
+              <div className="table-responsive">
+                <Table striped bordered>
+                  <thead>
+                    <tr>
+                      <th>Batch Name</th>
+                      <th>User Count</th>
+                      <th>Last Import</th>
+                      <th>Percentage</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {batchStats.batchStats.map((batch, index) => (
+                      <tr key={index}>
+                        <td>
+                          <Badge bg="secondary">{batch._id}</Badge>
+                        </td>
+                        <td>
+                          <strong>{batch.count}</strong>
+                        </td>
+                        <td>
+                          {batch.lastImport ? formatDate(batch.lastImport) : 'N/A'}
+                        </td>
+                        <td>
+                          <div className="d-flex align-items-center">
+                            <div className="flex-grow-1 me-2">
+                              <ProgressBar 
+                                now={(batch.count / batchStats.totalUsers) * 100} 
+                                variant="success"
+                                style={{height: '8px'}}
+                              />
+                            </div>
+                            <small>
+                              {((batch.count / batchStats.totalUsers) * 100).toFixed(1)}%
+                            </small>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center">
+              <div className="spinner-border text-primary" role="status">
+                <span className="visually-hidden">Loading...</span>
+              </div>
+              <p className="mt-2">Loading batch statistics...</p>
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowBatchStatsModal(false)}>
             Close
           </Button>
         </Modal.Footer>

@@ -51,7 +51,6 @@ const userSchema = new mongoose.Schema({
       country: String
     },
     tradingViewId: String,
-   // vishcardId: String,
     tradingSegment: {
       type: String,
       enum: ['Stock', 'Options', 'Forex', '']
@@ -70,7 +69,18 @@ const userSchema = new mongoose.Schema({
   isVerified: {
     type: Boolean,
     default: false
-  }
+  },
+  batch: {
+    type: String,
+    default: 'default'
+  },
+  importSource: {
+    type: String,
+    enum: ['manual', 'csv_import'],
+    default: 'manual'
+  },
+  importBatchId: String,
+  importDate: Date
 }, {
   timestamps: true
 });
