@@ -27,14 +27,31 @@ const Traders = () => {
       zipCode: '',
       country: ''
     },
+    address2: {
+      type: '',
+      street: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      country: ''
+    },
+    address3: {
+      street: ''
+    },
     tradingViewId: '',
-   // vishcardId: '',
     tradingSegment: '',
     discordId: '',
     profilePicture: {
       url: '',
       filename: ''
-    }
+    },
+    emailSubscriberStatus: '',
+    smsSubscriberStatus: '',
+    source: '',
+    language: '',
+    lastActivity: '',
+    lastActivityDate: '',
+    labels: []
   })
 
   // Get user ID from auth context
@@ -90,14 +107,27 @@ const Traders = () => {
             address: userProfile.profile.address || {
               street: '', city: '', state: '', zipCode: '', country: ''
             },
+            address2: userProfile.profile.address2 || {
+              type: '', street: '', city: '', state: '', zipCode: '', country: ''
+            },
+            address3: userProfile.profile.address3 || {
+              street: ''
+            },
             tradingViewId: userProfile.profile.tradingViewId || '',
-           // vishcardId: userProfile.profile.vishcardId || '',
             tradingSegment: userProfile.profile.tradingSegment || '',
             discordId: userProfile.profile.discordId || '',
             profilePicture: userProfile.profile.profilePicture || {
               url: '',
               filename: ''
-            }
+            },
+            emailSubscriberStatus: userProfile.profile.emailSubscriberStatus || '',
+            smsSubscriberStatus: userProfile.profile.smsSubscriberStatus || '',
+            source: userProfile.profile.source || '',
+            language: userProfile.profile.language || '',
+            lastActivity: userProfile.profile.lastActivity || '',
+            lastActivityDate: userProfile.profile.lastActivityDate ? 
+              new Date(userProfile.profile.lastActivityDate).toISOString().split('T')[0] : '',
+            labels: userProfile.profile.labels || []
           })
         }
 
@@ -121,12 +151,32 @@ const Traders = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
+    
+    // Handle nested objects
     if (name.startsWith('address.')) {
       const addressField = name.split('.')[1]
       setFormData(prev => ({
         ...prev,
         address: {
           ...prev.address,
+          [addressField]: value
+        }
+      }))
+    } else if (name.startsWith('address2.')) {
+      const addressField = name.split('.')[1]
+      setFormData(prev => ({
+        ...prev,
+        address2: {
+          ...prev.address2,
+          [addressField]: value
+        }
+      }))
+    } else if (name.startsWith('address3.')) {
+      const addressField = name.split('.')[1]
+      setFormData(prev => ({
+        ...prev,
+        address3: {
+          ...prev.address3,
           [addressField]: value
         }
       }))
@@ -304,6 +354,15 @@ const Traders = () => {
       return `${profile.profile.firstName.charAt(0)}${profile.profile.lastName.charAt(0)}`.toUpperCase()
     }
     return user?.username?.charAt(0).toUpperCase() || 'U'
+  }
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    })
   }
 
   if (loading) {
@@ -661,17 +720,6 @@ const Traders = () => {
                       />
                     </Form.Group>
 
-                    {/* <Form.Group className="mb-3">
-                      <Form.Label>Vishcard ID</Form.Label>
-                      <Form.Control
-                        type="text"
-                        name="vishcardId"
-                        value={formData.vishcardId}
-                        onChange={handleInputChange}
-                        placeholder="Enter your Vishcard ID"
-                      />
-                    </Form.Group> */}
-
                     <Form.Group className="mb-3">
                       <Form.Label>Trading Segment</Form.Label>
                       <div>
@@ -705,7 +753,106 @@ const Traders = () => {
                       </div>
                     </Form.Group>
 
-                    <h6 className="border-bottom pb-2">Address</h6>
+                    {/* Additional Profile Fields */}
+                    <Row>
+                      <Col md={6}>
+                        <Form.Group className="mb-3">
+                          <Form.Label>Email Subscriber Status</Form.Label>
+                          <Form.Control
+                            type="text"
+                            name="emailSubscriberStatus"
+                            value={formData.emailSubscriberStatus}
+                            onChange={handleInputChange}
+                            placeholder="Email subscription status"
+                          />
+                        </Form.Group>
+                      </Col>
+                      <Col md={6}>
+                        <Form.Group className="mb-3">
+                          <Form.Label>SMS Subscriber Status</Form.Label>
+                          <Form.Control
+                            type="text"
+                            name="smsSubscriberStatus"
+                            value={formData.smsSubscriberStatus}
+                            onChange={handleInputChange}
+                            placeholder="SMS subscription status"
+                          />
+                        </Form.Group>
+                      </Col>
+                    </Row>
+
+                    <Row>
+                      <Col md={6}>
+                        <Form.Group className="mb-3">
+                          <Form.Label>Source</Form.Label>
+                          <Form.Control
+                            type="text"
+                            name="source"
+                            value={formData.source}
+                            onChange={handleInputChange}
+                            placeholder="How did you find us?"
+                          />
+                        </Form.Group>
+                      </Col>
+                      <Col md={6}>
+                        <Form.Group className="mb-3">
+                          <Form.Label>Language</Form.Label>
+                          <Form.Control
+                            type="text"
+                            name="language"
+                            value={formData.language}
+                            onChange={handleInputChange}
+                            placeholder="Preferred language"
+                          />
+                        </Form.Group>
+                      </Col>
+                    </Row>
+
+                    <Row>
+                      <Col md={6}>
+                        <Form.Group className="mb-3">
+                          <Form.Label>Last Activity</Form.Label>
+                          <Form.Control
+                            type="text"
+                            name="lastActivity"
+                            value={formData.lastActivity}
+                            onChange={handleInputChange}
+                            placeholder="Last activity description"
+                          />
+                        </Form.Group>
+                      </Col>
+                      <Col md={6}>
+                        <Form.Group className="mb-3">
+                          <Form.Label>Last Activity Date</Form.Label>
+                          <Form.Control
+                            type="date"
+                            name="lastActivityDate"
+                            value={formData.lastActivityDate}
+                            onChange={handleInputChange}
+                          />
+                        </Form.Group>
+                      </Col>
+                    </Row>
+
+                    <Form.Group className="mb-3">
+                      <Form.Label>Labels</Form.Label>
+                      <Form.Control
+                        type="text"
+                        name="labels"
+                        value={formData.labels.join(', ')}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          labels: e.target.value.split(',').map(label => label.trim()).filter(label => label)
+                        }))}
+                        placeholder="Enter labels separated by commas"
+                      />
+                      <Form.Text className="text-muted">
+                        Separate multiple labels with commas
+                      </Form.Text>
+                    </Form.Group>
+
+                    {/* Address Sections */}
+                    <h6 className="border-bottom pb-2">Primary Address</h6>
                     <Row>
                       <Col md={12}>
                         <Form.Group className="mb-3">
@@ -768,6 +915,105 @@ const Traders = () => {
                             value={formData.address.country}
                             onChange={handleInputChange}
                             placeholder="Enter country"
+                          />
+                        </Form.Group>
+                      </Col>
+                    </Row>
+
+                    <h6 className="border-bottom pb-2 mt-4">Secondary Address</h6>
+                    <Row>
+                      <Col md={6}>
+                        <Form.Group className="mb-3">
+                          <Form.Label>Address Type</Form.Label>
+                          <Form.Select
+                            name="address2.type"
+                            value={formData.address2.type}
+                            onChange={handleInputChange}
+                          >
+                            <option value="">Select type</option>
+                            <option value="BILLING">Billing</option>
+                            <option value="SHIPPING">Shipping</option>
+                            <option value="OTHER">Other</option>
+                          </Form.Select>
+                        </Form.Group>
+                      </Col>
+                      <Col md={6}>
+                        <Form.Group className="mb-3">
+                          <Form.Label>Street</Form.Label>
+                          <Form.Control
+                            type="text"
+                            name="address2.street"
+                            value={formData.address2.street}
+                            onChange={handleInputChange}
+                            placeholder="Enter street address"
+                          />
+                        </Form.Group>
+                      </Col>
+                    </Row>
+                    <Row>
+                      <Col md={4}>
+                        <Form.Group className="mb-3">
+                          <Form.Label>City</Form.Label>
+                          <Form.Control
+                            type="text"
+                            name="address2.city"
+                            value={formData.address2.city}
+                            onChange={handleInputChange}
+                            placeholder="Enter city"
+                          />
+                        </Form.Group>
+                      </Col>
+                      <Col md={4}>
+                        <Form.Group className="mb-3">
+                          <Form.Label>State</Form.Label>
+                          <Form.Control
+                            type="text"
+                            name="address2.state"
+                            value={formData.address2.state}
+                            onChange={handleInputChange}
+                            placeholder="Enter state"
+                          />
+                        </Form.Group>
+                      </Col>
+                      <Col md={4}>
+                        <Form.Group className="mb-3">
+                          <Form.Label>ZIP Code</Form.Label>
+                          <Form.Control
+                            type="text"
+                            name="address2.zipCode"
+                            value={formData.address2.zipCode}
+                            onChange={handleInputChange}
+                            placeholder="Enter ZIP code"
+                          />
+                        </Form.Group>
+                      </Col>
+                    </Row>
+                    <Row>
+                      <Col md={12}>
+                        <Form.Group className="mb-3">
+                          <Form.Label>Country</Form.Label>
+                          <Form.Control
+                            type="text"
+                            name="address2.country"
+                            value={formData.address2.country}
+                            onChange={handleInputChange}
+                            placeholder="Enter country"
+                          />
+                        </Form.Group>
+                      </Col>
+                    </Row>
+
+                    <h6 className="border-bottom pb-2 mt-4">Tertiary Address</h6>
+                    <Row>
+                      <Col md={12}>
+                        <Form.Group className="mb-3">
+                          <Form.Label>Street</Form.Label>
+                          <Form.Control
+                            type="text"
+                            name="address3.street"
+                            value={formData.address3.street}
+                            onChange={handleInputChange}
+                            placeholder="Enter street address"
                           />
                         </Form.Group>
                       </Col>
@@ -849,10 +1095,18 @@ const Traders = () => {
                           <strong>Birthday:</strong>
                           <div>
                             {profile?.profile?.birthday ? 
-                              new Date(profile.profile.birthday).toLocaleDateString() : 
+                              formatDate(profile.profile.birthday) : 
                               'Not provided'
                             }
                           </div>
+                        </div>
+                        <div className="mb-3">
+                          <strong>Language:</strong>
+                          <div>{profile?.profile?.language || 'Not provided'}</div>
+                        </div>
+                        <div className="mb-3">
+                          <strong>Source:</strong>
+                          <div>{profile?.profile?.source || 'Not provided'}</div>
                         </div>
                       </Col>
                       <Col sm={6}>
@@ -860,10 +1114,6 @@ const Traders = () => {
                           <strong>TradingView ID:</strong>
                           <div>{profile?.profile?.tradingViewId || 'Not provided'}</div>
                         </div>
-                        {/* <div className="mb-3">
-                          <strong>Vishcard ID:</strong>
-                          <div>{profile?.profile?.vishcardId || 'Not provided'}</div>
-                        </div> */}
                         <div className="mb-3">
                           <strong>Discord ID:</strong>
                           <div>{profile?.profile?.discordId || 'Not provided'}</div>
@@ -873,20 +1123,64 @@ const Traders = () => {
                           <div>{profile?.profile?.tradingSegment || 'Not selected'}</div>
                         </div>
                         <div className="mb-3">
+                          <strong>Last Activity:</strong>
+                          <div>{profile?.profile?.lastActivity || 'Not provided'}</div>
+                        </div>
+                        <div className="mb-3">
+                          <strong>Last Activity Date:</strong>
+                          <div>
+                            {profile?.profile?.lastActivityDate ? 
+                              formatDate(profile.profile.lastActivityDate) : 
+                              'Not provided'
+                            }
+                          </div>
+                        </div>
+                        <div className="mb-3">
                           <strong>Member Since:</strong>
                           <div>
                             {user?.createdAt ? 
-                              new Date(user.createdAt).toLocaleDateString() : 
+                              formatDate(user.createdAt) : 
                               'N/A'
                             }
                           </div>
                         </div>
                       </Col>
                     </Row>
+
+                    {/* Subscription Status */}
+                    <Row className="mt-3">
+                      <Col sm={6}>
+                        <div className="mb-3">
+                          <strong>Email Subscriber Status:</strong>
+                          <div>{profile?.profile?.emailSubscriberStatus || 'Not provided'}</div>
+                        </div>
+                      </Col>
+                      <Col sm={6}>
+                        <div className="mb-3">
+                          <strong>SMS Subscriber Status:</strong>
+                          <div>{profile?.profile?.smsSubscriberStatus || 'Not provided'}</div>
+                        </div>
+                      </Col>
+                    </Row>
+
+                    {/* Labels */}
+                    {profile?.profile?.labels && profile.profile.labels.length > 0 && (
+                      <div className="mb-3">
+                        <strong>Labels:</strong>
+                        <div className="mt-1">
+                          {profile.profile.labels.map((label, index) => (
+                            <Badge key={index} bg="secondary" className="me-1 mb-1">
+                              {label}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     
+                    {/* Address Information */}
                     {profile?.profile?.address && (
                       <div className="mt-4">
-                        <h6>Address</h6>
+                        <h6>Primary Address</h6>
                         <Row>
                           <Col sm={6}>
                             <div className="mb-2">
@@ -913,6 +1207,48 @@ const Traders = () => {
                             </div>
                           </Col>
                         </Row>
+                      </div>
+                    )}
+
+                    {profile?.profile?.address2 && profile.profile.address2.street && (
+                      <div className="mt-4">
+                        <h6>Secondary Address ({profile.profile.address2.type || 'No type'})</h6>
+                        <Row>
+                          <Col sm={6}>
+                            <div className="mb-2">
+                              <strong>Street:</strong>
+                              <div>{profile.profile.address2.street || 'Not provided'}</div>
+                            </div>
+                            <div className="mb-2">
+                              <strong>City:</strong>
+                              <div>{profile.profile.address2.city || 'Not provided'}</div>
+                            </div>
+                            <div className="mb-2">
+                              <strong>State:</strong>
+                              <div>{profile.profile.address2.state || 'Not provided'}</div>
+                            </div>
+                          </Col>
+                          <Col sm={6}>
+                            <div className="mb-2">
+                              <strong>ZIP Code:</strong>
+                              <div>{profile.profile.address2.zipCode || 'Not provided'}</div>
+                            </div>
+                            <div className="mb-2">
+                              <strong>Country:</strong>
+                              <div>{profile.profile.address2.country || 'Not provided'}</div>
+                            </div>
+                          </Col>
+                        </Row>
+                      </div>
+                    )}
+
+                    {profile?.profile?.address3 && profile.profile.address3.street && (
+                      <div className="mt-4">
+                        <h6>Tertiary Address</h6>
+                        <div className="mb-2">
+                          <strong>Street:</strong>
+                          <div>{profile.profile.address3.street}</div>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -945,7 +1281,7 @@ const Traders = () => {
                               <strong>{enrollment.course?.title || 'Untitled Course'}</strong>
                               <div>
                                 <small className="text-muted">
-                                  Enrolled: {new Date(enrollment.enrollmentDate).toLocaleDateString()}
+                                  Enrolled: {formatDate(enrollment.enrollmentDate)}
                                 </small>
                               </div>
                             </td>

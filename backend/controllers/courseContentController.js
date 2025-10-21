@@ -1,5 +1,6 @@
 const path = require("path");
 const fs = require("fs");
+const jwt = require("jsonwebtoken");
 const CourseContent = require("../models/CourseContent");
 const Enrollment = require("../models/Enrollment");
 const Progress = require("../models/Progress");
@@ -264,11 +265,28 @@ const getCourseContents = async (req, res) => {
   }
 };
 
-// Stream video content securely
+// Stream video content securely - Handles both header auth and token in URL
 const streamVideo = async (req, res) => {
   try {
     const { contentId } = req.params;
-    const userId = req.user.id;
+    
+    // Get user ID from either header auth or query parameter
+    let userId;
+    
+    if (req.user && req.user.id) {
+      // User authenticated via header (normal API calls)
+      userId = req.user.id;
+    } else if (req.query.token) {
+      // User authenticated via token in URL (browser video tag)
+      try {
+        const decoded = jwt.verify(req.query.token, process.env.JWT_SECRET);
+        userId = decoded.id;
+      } catch (error) {
+        return res.status(401).json({ success: false, message: "Invalid token" });
+      }
+    } else {
+      return res.status(401).json({ success: false, message: "Authentication required" });
+    }
 
     console.log(`Streaming video for content ${contentId}, user ${userId}`);
 
@@ -308,28 +326,35 @@ const streamVideo = async (req, res) => {
     const fileSize = stat.size;
     const range = req.headers.range;
 
+    // Set proper headers for video streaming
+    const headers = {
+      'Content-Type': content.videoFile.mimetype || 'video/mp4',
+      'Accept-Ranges': 'bytes',
+      'Cache-Control': 'public, max-age=31536000', // Cache for 1 year
+    };
+
     if (range) {
       // Handle range requests for video seeking
       const parts = range.replace(/bytes=/, "").split("-");
       const start = parseInt(parts[0], 10);
       const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      
+      if (start >= fileSize || end >= fileSize) {
+        return res.status(416).json({ success: false, message: "Requested range not satisfiable" });
+      }
+
       const chunksize = (end - start) + 1;
       const file = fs.createReadStream(videoPath, { start, end });
-      const head = {
-        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-        'Accept-Ranges': 'bytes',
-        'Content-Length': chunksize,
-        'Content-Type': content.videoFile.mimetype || 'video/mp4',
-      };
-      res.writeHead(206, head);
+      
+      headers['Content-Range'] = `bytes ${start}-${end}/${fileSize}`;
+      headers['Content-Length'] = chunksize;
+      
+      res.writeHead(206, headers);
       file.pipe(res);
     } else {
       // Stream entire file
-      const head = {
-        'Content-Length': fileSize,
-        'Content-Type': content.videoFile.mimetype || 'video/mp4',
-      };
-      res.writeHead(200, head);
+      headers['Content-Length'] = fileSize;
+      res.writeHead(200, headers);
       fs.createReadStream(videoPath).pipe(res);
     }
   } catch (error) {

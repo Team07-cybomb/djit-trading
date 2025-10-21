@@ -4,25 +4,31 @@ const {
   updateProfile, 
   getUserById, 
   getCurrentUser,
-  uploadProfilePicture 
+  uploadProfilePicture,
+  importUsers,
+  getBatchStats,
+  getUserDetails,
+  updateUserRole,
+  deleteUser
 } = require('../controllers/userController');
 const { auth, adminAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Upload profile picture
+// Public routes (if any)
+
+// Protected routes
 router.post('/upload-profile-picture', auth, uploadProfilePicture);
-
-// Get current user profile
 router.get('/me', auth, getCurrentUser);
-
-// Get all users (admin only)
-router.get('/', auth, adminAuth, getUsers);
-
-// Get user by ID
+router.put('/profile', auth, updateProfile);
 router.get('/:id', auth, getUserById);
 
-// Update user profile
-router.put('/profile', auth, updateProfile);
+// Admin only routes
+router.get('/', auth, adminAuth, getUsers);
+router.post('/import', auth, adminAuth, importUsers);
+router.get('/batch-stats', auth, adminAuth, getBatchStats);
+router.get('/:id/details', auth, adminAuth, getUserDetails);
+router.put('/:id/role', auth, adminAuth, updateUserRole);
+router.delete('/:id', auth, adminAuth, deleteUser);
 
 module.exports = router;

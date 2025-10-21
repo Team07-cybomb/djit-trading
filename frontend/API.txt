@@ -237,3 +237,8 @@ Newsletter
 POST http://localhost:5000/api/newsletter - Subscribe to newsletter
 
 POST http://localhost:5000/api/newsletter/unsubscribe - Unsubscribe from newsletter
+
+
+Djit Hunter - Master Entry Course;Hunters Group member-->advanced course
+
+Basics of Trading;Basics of Trading Group member-->basic course
