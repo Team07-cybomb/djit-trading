@@ -30,9 +30,14 @@ const UserManagement = () => {
     return localStorage.getItem('adminToken') || localStorage.getItem('token')
   }
 
+  // FIX: Use absolute URL to backend server
+  const API_BASE_URL = process.env.NODE_ENV === 'production' 
+    ? '/api' 
+    : 'http://localhost:5000/api'
+
   // Create axios instance with auth header
   const api = axios.create({
-    baseURL: '/api'
+    baseURL: API_BASE_URL
   })
 
   // Add request interceptor to include auth token
@@ -45,6 +50,19 @@ const UserManagement = () => {
       return config
     },
     (error) => {
+      return Promise.reject(error)
+    }
+  )
+
+  // Add response interceptor to handle errors
+  api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+      if (error.response?.status === 401) {
+        showAlert('Session expired. Please login again.', 'danger')
+        // Optional: redirect to login
+        // window.location.href = '/login'
+      }
       return Promise.reject(error)
     }
   )
@@ -66,6 +84,8 @@ const UserManagement = () => {
         showAlert('Access denied. Admin privileges required.', 'danger')
       } else if (error.response?.status === 401) {
         showAlert('Please login again.', 'danger')
+      } else if (error.response?.status === 404) {
+        showAlert('Backend server not found. Make sure your backend is running.', 'danger')
       } else {
         showAlert('Error fetching users', 'danger')
       }
@@ -177,10 +197,14 @@ const UserManagement = () => {
       formData.append('csvFile', csvFile)
       formData.append('batchName', batchName)
 
-      const response = await api.post('/admin/users/import', formData, {
+      // FIX: Use direct axios with absolute URL for file uploads
+      const token = getAuthToken()
+      const response = await axios.post(`${API_BASE_URL}/admin/users/import`, formData, {
         headers: {
-          'Content-Type': 'multipart/form-data'
-        }
+          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}`
+        },
+        timeout: 120000 // Increase timeout for large files
       })
 
       setImportResults(response.data)
@@ -190,7 +214,15 @@ const UserManagement = () => {
       fetchUsers()
     } catch (error) {
       console.error('Error importing CSV:', error)
-      showAlert('Error importing CSV file', 'danger')
+      if (error.code === 'ECONNABORTED') {
+        showAlert('Import timeout. The file might be too large.', 'danger')
+      } else if (error.response?.status === 404) {
+        showAlert('Backend server not found. Make sure your backend is running on port 5000.', 'danger')
+      } else if (error.response?.status === 413) {
+        showAlert('File too large. Please select a smaller CSV file.', 'danger')
+      } else {
+        showAlert('Error importing CSV file: ' + (error.response?.data?.message || error.message), 'danger')
+      }
     } finally {
       setImportLoading(false)
     }

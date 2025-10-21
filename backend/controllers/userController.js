@@ -9,7 +9,6 @@ const bcrypt = require('bcryptjs');
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     const uploadDir = 'uploads/profile-pictures/';
-    // Create directory if it doesn't exist
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
@@ -64,6 +63,43 @@ const csvUpload = multer({
   }
 });
 
+// Helper function to parse date
+const parseDate = (dateString) => {
+  if (!dateString) return null;
+  
+  // Handle various date formats
+  const formats = [
+    'YYYY-MM-DD',
+    'DD/MM/YYYY', 
+    'MM/DD/YYYY',
+    'YYYY/MM/DD'
+  ];
+  
+  for (let format of formats) {
+    const date = new Date(dateString);
+    if (!isNaN(date.getTime())) {
+      return date;
+    }
+  }
+  
+  return null;
+};
+
+// Helper function to clean phone number
+const cleanPhoneNumber = (phone) => {
+  if (!phone) return '';
+  // Remove all non-digit characters except +
+  return phone.toString().replace(/[^\d+]/g, '');
+};
+
+// Helper function to generate username from email
+const generateUsername = (email) => {
+  if (!email) return `user_${Date.now()}`;
+  const baseUsername = email.toLowerCase().split('@')[0];
+  // Remove special characters from username
+  return baseUsername.replace(/[^a-zA-Z0-9]/g, '');
+};
+
 // Get all users (admin only)
 exports.getUsers = async (req, res) => {
   try {
@@ -83,7 +119,6 @@ exports.getUsers = async (req, res) => {
       };
     }
 
-    // Add batch filter
     if (batch) {
       query.batch = batch;
     }
@@ -95,8 +130,6 @@ exports.getUsers = async (req, res) => {
       .skip((page - 1) * limit);
 
     const total = await User.countDocuments(query);
-
-    // Get unique batches for filter dropdown
     const batches = await User.distinct('batch');
 
     res.json({
@@ -116,7 +149,7 @@ exports.getUsers = async (req, res) => {
   }
 };
 
-// Import users from CSV
+// Import users from CSV - FIXED VERSION
 exports.importUsers = [
   csvUpload.single('csvFile'),
   async (req, res) => {
@@ -143,20 +176,16 @@ exports.importUsers = [
             results.total++;
 
             // Skip if no email
-            if (!row['Email 1'] && !row['Email 2']) {
+            const email = row['Email 1'] || row['Email 2'];
+            if (!email) {
               results.failed++;
               results.errors.push(`Row ${results.total}: No email provided`);
               return resolve();
             }
 
-            const email = row['Email 1'] || row['Email 2'];
-            
             // Check if user already exists
             const existingUser = await User.findOne({ 
-              $or: [
-                { email: email.toLowerCase() },
-                { username: email.toLowerCase().split('@')[0] }
-              ] 
+              email: email.toLowerCase().trim()
             });
 
             if (existingUser) {
@@ -165,49 +194,89 @@ exports.importUsers = [
               return resolve();
             }
 
-            // Generate username from email
-            const username = email.toLowerCase().split('@')[0];
+            // Generate username
+            const username = generateUsername(email);
             
             // Generate a random password
-            const tempPassword = Math.random().toString(36).slice(-8);
+            const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
             
-            // Parse birthday
-            let birthday = null;
-            if (row['Birthdate']) {
-              birthday = new Date(row['Birthdate']);
-            }
+            // Parse dates
+            const birthday = parseDate(row['Birthdate']);
+            const createdAtUTC = parseDate(row['Created At (UTC+0)']);
+            const lastActivityDate = parseDate(row['Last Activity Date (UTC+0)']);
 
-            // Create user
+            // Clean phone numbers
+            const phone1 = cleanPhoneNumber(row['Phone 1']);
+            const phone2 = cleanPhoneNumber(row['Phone 2']);
+
+            // Parse labels
+            const labels = row['Labels'] ? 
+              row['Labels'].split(';').map(label => label.trim()).filter(label => label) : 
+              [];
+
+            // Create user data with ALL fields from CSV
             const userData = {
               username: username,
-              email: email.toLowerCase(),
+              email: email.toLowerCase().trim(),
               password: tempPassword,
               batch: batchName,
               importSource: 'csv_import',
               importBatchId: batchId,
               importDate: new Date(),
               profile: {
-                firstName: row['First Name'] || '',
-                lastName: row['Last Name'] || '',
-                phone: row['Phone 1'] || '',
-                phone2: row['Phone 2'] || '',
+                firstName: (row['First Name'] || '').trim(),
+                lastName: (row['Last Name'] || '').trim(),
+                phone: phone1,
+                phone2: phone2,
                 birthday: birthday,
-                discordId: row['discord id'] || '',
-                tradingViewId: row['Tradingview ID'] || '',
+                discordId: (row['discord id'] || '').trim(),
+                tradingViewId: (row['Tradingview ID'] || '').trim(),
+                
+                // Primary Address
                 address: {
-                  street: row['Address 1 - Street'] || '',
-                  city: row['Address 2 - City'] || '',
-                  state: row['Address 2 - State/Region'] || '',
-                  zipCode: row['Address 2 - Zip'] || '',
-                  country: row['Address 2 - Country'] || ''
+                  street: (row['Address 1 - Street'] || '').trim(),
+                  city: '',
+                  state: '',
+                  zipCode: '',
+                  country: ''
                 },
-                labels: row['Labels'] ? row['Labels'].split(';') : [],
-                emailSubscriberStatus: row['Email subscriber status'] || '',
-                smsSubscriberStatus: row['SMS subscriber status'] || '',
-                source: row['Source'] || '',
-                language: row['Language'] || ''
+                
+                // Secondary Address
+                address2: {
+                  type: (row['Address 2 - Type'] || '').trim(),
+                  street: (row['Address 2 - Street'] || '').trim(),
+                  city: (row['Address 2 - City'] || '').trim(),
+                  state: (row['Address 2 - State/Region'] || '').trim(),
+                  zipCode: (row['Address 2 - Zip'] || '').trim(),
+                  country: (row['Address 2 - Country'] || '').trim()
+                },
+                
+                // Tertiary Address
+                address3: {
+                  street: (row['Address 3 - Street'] || '').trim()
+                },
+                
+                labels: labels,
+                emailSubscriberStatus: (row['Email subscriber status'] || '').trim(),
+                smsSubscriberStatus: (row['SMS subscriber status'] || '').trim(),
+                source: (row['Source'] || '').trim(),
+                language: (row['Language'] || '').trim(),
+                lastActivity: (row['Last Activity'] || '').trim(),
+                lastActivityDate: lastActivityDate,
+                createdAtUTC: createdAtUTC
               }
             };
+
+            // If Address 1 has data but Address 2 doesn't, move Address 1 data to address field
+            if (row['Address 1 - Street'] && !row['Address 2 - Street']) {
+              userData.profile.address = {
+                street: (row['Address 1 - Street'] || '').trim(),
+                city: (row['Address 2 - City'] || '').trim(),
+                state: (row['Address 2 - State/Region'] || '').trim(),
+                zipCode: (row['Address 2 - Zip'] || '').trim(),
+                country: (row['Address 2 - Country'] || '').trim()
+              };
+            }
 
             const user = new User(userData);
             await user.save();
@@ -216,6 +285,7 @@ exports.importUsers = [
           } catch (error) {
             results.failed++;
             results.errors.push(`Row ${results.total}: ${error.message}`);
+            console.error('Error processing row:', error);
             resolve();
           }
         });
@@ -231,7 +301,7 @@ exports.importUsers = [
           .on('error', reject);
       });
 
-      // Process rows sequentially to avoid database conflicts
+      // Process rows sequentially
       for (const row of rows) {
         await processRow(row);
       }
@@ -250,7 +320,6 @@ exports.importUsers = [
     } catch (error) {
       console.error('CSV import error:', error);
       
-      // Delete the uploaded file if there was an error
       if (req.file) {
         fs.unlinkSync(req.file.path);
       }
@@ -276,7 +345,7 @@ exports.getBatchStats = async (req, res) => {
         }
       },
       {
-        $sort: { lastImport: -1 }
+        $sort: { count: -1 }
       }
     ]);
 
@@ -305,6 +374,8 @@ exports.updateProfile = async (req, res) => {
       phone, 
       birthday, 
       address, 
+      address2,
+      address3,
       tradingViewId, 
       tradingSegment,
       firstName,
@@ -312,20 +383,41 @@ exports.updateProfile = async (req, res) => {
       phone2,
       discordId,
       profilePicture,
-      batch
+      batch,
+      emailSubscriberStatus,
+      smsSubscriberStatus,
+      source,
+      language,
+      lastActivity,
+      lastActivityDate,
+      labels
     } = req.body;
     
     const updateData = {
       'profile.phone': phone,
-      'profile.birthday': birthday,
+      'profile.birthday': birthday ? parseDate(birthday) : undefined,
       'profile.tradingViewId': tradingViewId,
       'profile.tradingSegment': tradingSegment,
       'profile.firstName': firstName,
       'profile.lastName': lastName,
       'profile.phone2': phone2,
       'profile.discordId': discordId,
-      'profile.profilePicture': profilePicture
+      'profile.profilePicture': profilePicture,
+      'profile.emailSubscriberStatus': emailSubscriberStatus,
+      'profile.smsSubscriberStatus': smsSubscriberStatus,
+      'profile.source': source,
+      'profile.language': language,
+      'profile.lastActivity': lastActivity,
+      'profile.lastActivityDate': lastActivityDate ? parseDate(lastActivityDate) : undefined,
+      'profile.labels': labels
     };
+
+    // Remove undefined fields
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) {
+        delete updateData[key];
+      }
+    });
 
     // Add batch if provided
     if (batch) {
@@ -339,6 +431,19 @@ exports.updateProfile = async (req, res) => {
       updateData['profile.address.state'] = address.state;
       updateData['profile.address.zipCode'] = address.zipCode;
       updateData['profile.address.country'] = address.country;
+    }
+
+    if (address2) {
+      updateData['profile.address2.type'] = address2.type;
+      updateData['profile.address2.street'] = address2.street;
+      updateData['profile.address2.city'] = address2.city;
+      updateData['profile.address2.state'] = address2.state;
+      updateData['profile.address2.zipCode'] = address2.zipCode;
+      updateData['profile.address2.country'] = address2.country;
+    }
+
+    if (address3) {
+      updateData['profile.address3.street'] = address3.street;
     }
 
     const user = await User.findByIdAndUpdate(
@@ -381,7 +486,6 @@ exports.uploadProfilePicture = [
         });
       }
 
-      // Use absolute URL for the uploaded file to fix 404 issue
       const baseUrl = process.env.NODE_ENV === 'production' 
         ? `${req.protocol}://${req.get('host')}`
         : 'http://localhost:5000';
@@ -391,7 +495,6 @@ exports.uploadProfilePicture = [
         filename: req.file.filename
       };
 
-      // Update user's profile picture
       const user = await User.findByIdAndUpdate(
         req.user.id,
         {
@@ -403,7 +506,6 @@ exports.uploadProfilePicture = [
       ).select('-password');
 
       if (!user) {
-        // Delete the uploaded file if user not found
         fs.unlinkSync(req.file.path);
         return res.status(404).json({
           success: false,
@@ -421,7 +523,6 @@ exports.uploadProfilePicture = [
     } catch (error) {
       console.error('Profile picture upload error:', error);
       
-      // Delete the uploaded file if there was an error
       if (req.file) {
         fs.unlinkSync(req.file.path);
       }
@@ -472,6 +573,80 @@ exports.getUserById = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       message: 'Error fetching user',
+      error: error.message
+    });
+  }
+};
+
+// Get user details for admin
+exports.getUserDetails = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select('-password');
+    if (!user) {
+      return res.status(404).json({
+        message: 'User not found'
+      });
+    }
+    res.json({
+      success: true,
+      user
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: 'Error fetching user details',
+      error: error.message
+    });
+  }
+};
+
+// Update user role (admin only)
+exports.updateUserRole = async (req, res) => {
+  try {
+    const { role } = req.body;
+    
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { role },
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'User role updated successfully',
+      user
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: 'Error updating user role',
+      error: error.message
+    });
+  }
+};
+
+// Delete user (admin only)
+exports.deleteUser = async (req, res) => {
+  try {
+    const user = await User.findByIdAndDelete(req.params.id);
+    
+    if (!user) {
+      return res.status(404).json({
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'User deleted successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: 'Error deleting user',
       error: error.message
     });
   }

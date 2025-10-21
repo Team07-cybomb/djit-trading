@@ -42,18 +42,41 @@ const userSchema = new mongoose.Schema({
       zipCode: String,
       country: String
     },
+    // FIX: Change address2 from String to Object
     address2: {
-      type: String,
-      street: String,
-      city: String,
-      state: String,
-      zipCode: String,
-      country: String
+      type: {
+        type: String,
+        default: ''
+      },
+      street: {
+        type: String,
+        default: ''
+      },
+      city: {
+        type: String,
+        default: ''
+      },
+      state: {
+        type: String,
+        default: ''
+      },
+      zipCode: {
+        type: String,
+        default: ''
+      },
+      country: {
+        type: String,
+        default: ''
+      }
+    },
+    address3: {
+      street: String
     },
     tradingViewId: String,
     tradingSegment: {
       type: String,
-      enum: ['Stock', 'Options', 'Forex', '']
+      enum: ['Stock', 'Options', 'Forex', ''],
+      default: ''
     },
     badge: {
       type: String,
@@ -64,11 +87,18 @@ const userSchema = new mongoose.Schema({
     emailSubscriberStatus: String,
     smsSubscriberStatus: String,
     source: String,
-    language: String
+    language: String,
+    lastActivity: String,
+    lastActivityDate: Date,
+    createdAtUTC: Date
   },
   isVerified: {
     type: Boolean,
     default: false
+  },
+  isActive: {
+    type: Boolean,
+    default: true
   },
   batch: {
     type: String,
